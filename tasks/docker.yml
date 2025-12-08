@@ -36,7 +36,10 @@
 
 - name: Add official Docker repository
   ansible.builtin.apt_repository:
-    repo: "deb [arch={{ docker_arch }} signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+    repo: >-
+      deb [arch={{ docker_arch }} signed-by=/etc/apt/keyrings/docker.asc]
+      https://download.docker.com/linux/ubuntu
+      {{ ansible_distribution_release }} stable
     state: present
     filename: docker
 
@@ -57,9 +60,29 @@
     state: started
     enabled: true
 
-- name: Add current user to Docker group
+- name: Determine user for Docker group
+  ansible.builtin.set_fact:
+    docker_group_user: >-
+      {{
+        ansible_env.SUDO_USER |
+        default(lookup('env', 'USER')) |
+        default(ansible_user_id) |
+        default('root')
+      }}
+
+- name: Add user to Docker group
   ansible.builtin.user:
-    name: "{{ ansible_env.SUDO_USER | default(ansible_user_id) }}"
+    name: "{{ docker_group_user }}"
     groups: docker
     append: true
   notify: Notify user about Docker group change
+  when: docker_group_user != 'root'
+
+- name: Display Docker group information
+  ansible.builtin.debug:
+    msg:
+      - "User '{{ docker_group_user }}' has been added to the docker group"
+      - "Note: You need to log out and back in for this to take effect"
+      - "Or run: newgrp docker"
+      - "Current SSH session will NOT have docker group access immediately"
+  when: docker_group_user != 'root'

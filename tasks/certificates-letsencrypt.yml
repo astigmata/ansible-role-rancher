@@ -49,6 +49,7 @@
     mode: '0644'
     owner: root
     group: root
+  register: cert_copy
 
 - name: Copy Let's Encrypt private key
   ansible.builtin.copy:
@@ -58,21 +59,30 @@
     mode: '0600'
     owner: root
     group: root
+  register: key_copy
 
-- name: Create combined certificate file
+- name: Create/Update combined certificate file (regenerate if cert renewed)
   ansible.builtin.shell: >
     cat {{ rancher_ssl_cert_dir }}/cert.pem {{ rancher_ssl_cert_dir }}/key.pem
     > {{ rancher_ssl_cert_dir }}/tls.pem
-  args:
-    creates: "{{ rancher_ssl_cert_dir }}/tls.pem"
+  when: cert_copy.changed or key_copy.changed
+  changed_when: true
 
-- name: Set up automatic renewal
+- name: Set up automatic renewal with certificate copy
   ansible.builtin.cron:
     name: "Renew Let's Encrypt certificates"
     minute: "0"
     hour: "3"
     day: "*/7"
-    job: "certbot renew --quiet --deploy-hook 'docker restart {{ rancher_container_name }}'"
+    job: >-
+      certbot renew --quiet --deploy-hook
+      'cp /etc/letsencrypt/live/{{ rancher_letsencrypt_domain }}/fullchain.pem
+      {{ rancher_ssl_cert_dir }}/cert.pem &&
+      cp /etc/letsencrypt/live/{{ rancher_letsencrypt_domain }}/privkey.pem
+      {{ rancher_ssl_cert_dir }}/key.pem &&
+      cat {{ rancher_ssl_cert_dir }}/cert.pem {{ rancher_ssl_cert_dir }}/key.pem
+      > {{ rancher_ssl_cert_dir }}/tls.pem &&
+      docker restart {{ rancher_container_name }}'
 
 - name: Display Let's Encrypt certificate information
   ansible.builtin.debug:

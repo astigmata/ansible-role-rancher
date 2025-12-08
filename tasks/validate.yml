@@ -7,7 +7,9 @@
     that:
       - ansible_processor_vcpus >= rancher_min_vcpus
       - ansible_memtotal_mb >= rancher_min_memory_mb
-    fail_msg: "Insufficient hardware: At least {{ rancher_min_vcpus }} vCPUs and {{ rancher_min_memory_mb }} MB of RAM are required."
+    fail_msg: >-
+      Insufficient hardware: At least {{ rancher_min_vcpus }} vCPUs
+      and {{ rancher_min_memory_mb }} MB of RAM are required.
 
 - name: Verify bootstrap password is defined
   ansible.builtin.assert:
@@ -21,4 +23,6 @@
     that:
       - rancher_bootstrap_password | length >= 12
       - rancher_bootstrap_password is search("[0-9]")
-    fail_msg: "Password too weak. Required: Min 12 characters and at least 1 number."
+    fail_msg: >-
+      Password too weak. Required: Min 12 characters
+      and at least 1 number.
