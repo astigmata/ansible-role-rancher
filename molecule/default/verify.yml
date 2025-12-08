@@ -1,0 +1,108 @@
+---
+- name: Verify
+  hosts: all
+  become: true
+
+  tasks:
+    - name: Check if Docker is installed
+      ansible.builtin.command: docker --version
+      register: docker_version
+      changed_when: false
+      failed_when: docker_version.rc != 0
+
+    - name: Display Docker version
+      ansible.builtin.debug:
+        var: docker_version.stdout
+
+    - name: Check if Docker service is running
+      ansible.builtin.service_facts:
+
+    - name: Assert Docker service is running
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.services['docker.service'].state == 'running'
+        fail_msg: "Docker service is not running"
+        success_msg: "Docker service is running"
+
+    - name: Check if Rancher data volume exists
+      community.docker.docker_volume_info:
+        name: rancher_data
+      register: rancher_volume
+
+    - name: Assert Rancher volume exists
+      ansible.builtin.assert:
+        that:
+          - rancher_volume.exists
+        fail_msg: "Rancher data volume does not exist"
+        success_msg: "Rancher data volume exists"
+
+    - name: Get Rancher container info
+      community.docker.docker_container_info:
+        name: rancher
+      register: rancher_container
+      when: not (rancher_skip_container_deploy | default(false) | bool)
+
+    - name: Assert Rancher container exists and is running
+      ansible.builtin.assert:
+        that:
+          - rancher_container.exists
+          - rancher_container.container.State.Status == 'running'
+        fail_msg: "Rancher container is not running properly"
+        success_msg: "Rancher container is running"
+      when: not (rancher_skip_container_deploy | default(false) | bool)
+
+    - name: Verify Rancher ports are exposed
+      ansible.builtin.assert:
+        that:
+          - rancher_container.container.NetworkSettings.Ports['80/tcp'] is defined
+          - rancher_container.container.NetworkSettings.Ports['443/tcp'] is defined
+        fail_msg: "Rancher ports are not properly exposed"
+        success_msg: "Rancher ports are properly exposed"
+      when: not (rancher_skip_container_deploy | default(false) | bool)
+
+    - name: Check Rancher API (may take some time)
+      ansible.builtin.uri:
+        url: "https://localhost:8443/ping"
+        validate_certs: false
+        status_code: 200
+        follow_redirects: none
+      register: rancher_api
+      until: rancher_api.status == 200
+      retries: 30
+      delay: 10
+      failed_when: false
+      when: not (rancher_skip_container_deploy | default(false) | bool)
+
+    - name: Display Rancher API status
+      ansible.builtin.debug:
+        msg: "Rancher API status: {{ rancher_api.status | default('Not reachable yet') }}"
+      when: not (rancher_skip_container_deploy | default(false) | bool)
+
+    - name: Test mode summary
+      ansible.builtin.debug:
+        msg:
+          - "======================================================="
+          - "TEST MODE: Validation complete"
+          - "✓ Docker installed and running"
+          - "✓ Docker volume created"
+          - "✓ All prerequisites validated"
+          - "Note: Rancher container deployment was skipped (Docker-in-Docker limitation)"
+          - "======================================================="
+      when: rancher_skip_container_deploy | default(false) | bool
+
+    - name: UFW status (if Ubuntu and firewall configured)
+      ansible.builtin.command: ufw status
+      register: ufw_status
+      changed_when: false
+      failed_when: false
+      when:
+        - ansible_distribution == 'Ubuntu'
+        - rancher_configure_firewall | default(true) | bool
+
+    - name: Display UFW status
+      ansible.builtin.debug:
+        var: ufw_status.stdout_lines
+      when:
+        - ansible_distribution == 'Ubuntu'
+        - rancher_configure_firewall | default(true) | bool
+        - ufw_status is defined

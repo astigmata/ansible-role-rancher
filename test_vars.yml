@@ -1,0 +1,7 @@
+---
+# Variables pour les tests Vagrant
+# Ces valeurs doivent correspondre à celles du Vagrantfile
+
+rancher_bootstrap_password: "admin123456789"
+rancher_public_ip: "192.168.56.15"
+rancher_configure_firewall: false

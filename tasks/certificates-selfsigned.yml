@@ -1,0 +1,119 @@
+---
+# ---------------------------------------------------------
+# SELF-SIGNED CERTIFICATE GENERATION
+# ---------------------------------------------------------
+- name: Install OpenSSL
+  ansible.builtin.package:
+    name: openssl
+    state: present
+
+- name: Check if self-signed certificate already exists
+  ansible.builtin.stat:
+    path: "{{ rancher_ssl_cert_dir }}/cert.pem"
+  register: existing_cert
+
+- name: Check if certificate is still valid
+  when: existing_cert.stat.exists
+  block:
+    - name: Get certificate expiration date
+      ansible.builtin.command: >
+        openssl x509 -in {{ rancher_ssl_cert_dir }}/cert.pem -noout -checkend 86400
+      register: cert_valid
+      changed_when: false
+      failed_when: false
+
+    - name: Set certificate needs renewal flag
+      ansible.builtin.set_fact:
+        cert_needs_renewal: "{{ cert_valid.rc != 0 }}"
+
+- name: Generate new self-signed certificate
+  when: not existing_cert.stat.exists or (cert_needs_renewal | default(false))
+  block:
+    - name: Generate private key
+      ansible.builtin.command: >
+        openssl genrsa -out {{ rancher_ssl_cert_dir }}/key.pem 2048
+      args:
+        creates: "{{ rancher_ssl_cert_dir }}/key.pem"
+
+    - name: Set private key permissions
+      ansible.builtin.file:
+        path: "{{ rancher_ssl_cert_dir }}/key.pem"
+        mode: '0600'
+        owner: root
+        group: root
+
+    - name: Generate certificate signing request (CSR)
+      ansible.builtin.command: >
+        openssl req -new -key {{ rancher_ssl_cert_dir }}/key.pem
+        -out {{ rancher_ssl_cert_dir }}/csr.pem
+        -subj "/C={{ rancher_ssl_selfsigned_country }}/ST={{ rancher_ssl_selfsigned_state }}/L={{ rancher_ssl_selfsigned_locality }}/O={{ rancher_ssl_selfsigned_organization }}/CN={{ rancher_ssl_selfsigned_common_name }}"
+      args:
+        creates: "{{ rancher_ssl_cert_dir }}/csr.pem"
+
+    - name: Create OpenSSL configuration for SAN
+      ansible.builtin.copy:
+        dest: "{{ rancher_ssl_cert_dir }}/openssl.cnf"
+        content: |
+          [req]
+          distinguished_name = req_distinguished_name
+          x509_extensions = v3_req
+          prompt = no
+
+          [req_distinguished_name]
+          C = {{ rancher_ssl_selfsigned_country }}
+          ST = {{ rancher_ssl_selfsigned_state }}
+          L = {{ rancher_ssl_selfsigned_locality }}
+          O = {{ rancher_ssl_selfsigned_organization }}
+          CN = {{ rancher_ssl_selfsigned_common_name }}
+
+          [v3_req]
+          keyUsage = keyEncipherment, dataEncipherment
+          extendedKeyUsage = serverAuth
+          subjectAltName = @alt_names
+
+          [alt_names]
+          IP.1 = {{ rancher_ssl_selfsigned_common_name }}
+          DNS.1 = {{ rancher_ssl_selfsigned_common_name }}
+          DNS.2 = localhost
+        mode: '0644'
+
+    - name: Generate self-signed certificate
+      ansible.builtin.command: >
+        openssl x509 -req
+        -in {{ rancher_ssl_cert_dir }}/csr.pem
+        -signkey {{ rancher_ssl_cert_dir }}/key.pem
+        -out {{ rancher_ssl_cert_dir }}/cert.pem
+        -days {{ rancher_ssl_selfsigned_days }}
+        -extensions v3_req
+        -extfile {{ rancher_ssl_cert_dir }}/openssl.cnf
+      args:
+        creates: "{{ rancher_ssl_cert_dir }}/cert.pem"
+
+    - name: Set certificate permissions
+      ansible.builtin.file:
+        path: "{{ rancher_ssl_cert_dir }}/cert.pem"
+        mode: '0644'
+        owner: root
+        group: root
+
+    - name: Create combined certificate file (cert + key)
+      ansible.builtin.shell: >
+        cat {{ rancher_ssl_cert_dir }}/cert.pem {{ rancher_ssl_cert_dir }}/key.pem
+        > {{ rancher_ssl_cert_dir }}/tls.pem
+      args:
+        creates: "{{ rancher_ssl_cert_dir }}/tls.pem"
+
+    - name: Set combined file permissions
+      ansible.builtin.file:
+        path: "{{ rancher_ssl_cert_dir }}/tls.pem"
+        mode: '0600'
+        owner: root
+        group: root
+
+- name: Display self-signed certificate warning
+  ansible.builtin.debug:
+    msg:
+      - "WARNING: Using self-signed certificate"
+      - "Your browser will show a security warning"
+      - "For production, use 'provided' or 'letsencrypt' mode"
+      - "Certificate CN: {{ rancher_ssl_selfsigned_common_name }}"

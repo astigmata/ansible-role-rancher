@@ -1,0 +1,83 @@
+---
+# ---------------------------------------------------------
+# RANCHER DEPLOYMENT
+# ---------------------------------------------------------
+- name: Create Rancher persistent volume
+  community.docker.docker_volume:
+    name: "{{ rancher_data_volume }}"
+    state: present
+
+- name: Start Rancher container
+  community.docker.docker_container:
+    name: "{{ rancher_container_name }}"
+    image: "rancher/rancher:{{ rancher_version }}"
+    state: started
+    restart_policy: unless-stopped
+    privileged: true
+    command: "{{ (rancher_ssl_mode == 'selfsigned') | ternary(['--no-cacerts'], omit) }}"
+    ports:
+      - "{{ rancher_http_port }}:80"
+      - "{{ rancher_port }}:443"
+    volumes:
+      - "{{ rancher_data_volume }}:/var/lib/rancher"
+      - "{{ rancher_ssl_cert_dir }}/cert.pem:/etc/rancher/ssl/cert.pem:ro"
+      - "{{ rancher_ssl_cert_dir }}/key.pem:/etc/rancher/ssl/key.pem:ro"
+    env:
+      CATTLE_BOOTSTRAP_PASSWORD: "{{ rancher_bootstrap_password }}"
+    comparisons:
+      env: strict
+  when: not (rancher_skip_container_deploy | default(false) | bool)
+
+- name: Pause to allow Docker internal initialization
+  ansible.builtin.pause:
+    seconds: "{{ rancher_init_pause_seconds }}"
+  when: not (rancher_skip_container_deploy | default(false) | bool)
+
+- name: Wait for Rancher API availability
+  ansible.builtin.uri:
+    url: "https://localhost:{{ rancher_port }}/ping"
+    validate_certs: false
+    status_code: 200
+    follow_redirects: none
+  register: result
+  until: result.status == 200
+  retries: "{{ rancher_api_wait_retries }}"
+  delay: "{{ rancher_api_wait_delay }}"
+  when: not (rancher_skip_container_deploy | default(false) | bool)
+
+- name: Wait for Rancher complete initialization
+  ansible.builtin.uri:
+    url: "https://localhost:{{ rancher_port }}/v3-public/authProviders"
+    validate_certs: false
+    status_code: 200
+    follow_redirects: none
+  register: api_ready
+  until: api_ready.status == 200
+  retries: "{{ rancher_full_init_retries | default(60) }}"
+  delay: "{{ rancher_full_init_delay | default(10) }}"
+  when: not (rancher_skip_container_deploy | default(false) | bool)
+
+- name: Deployment complete
+  ansible.builtin.debug:
+    msg:
+      - "======================================================="
+      - "Rancher Server is fully initialized and ready!"
+      - "Access URL: https://{{ rancher_public_ip | default(ansible_default_ipv4.address) }}:{{ rancher_port }}"
+      - "Login credentials:"
+      - "  Username: admin"
+      - "  Password: {{ rancher_bootstrap_password }}"
+      - "======================================================="
+  when: not (rancher_skip_container_deploy | default(false) | bool)
+
+- name: Test mode - Rancher container deployment skipped
+  ansible.builtin.debug:
+    msg:
+      - "======================================================="
+      - "TEST MODE: Rancher container deployment has been skipped"
+      - "All prerequisites have been validated:"
+      - "  - Hardware requirements checked"
+      - "  - Docker installed and running"
+      - "  - Rancher data volume created"
+      - "Ready for Rancher deployment in production!"
+      - "======================================================="
+  when: rancher_skip_container_deploy | default(false) | bool

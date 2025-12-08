@@ -1,0 +1,55 @@
+---
+# Rancher configuration
+rancher_version: "stable"
+rancher_data_volume: "rancher_data"
+rancher_container_name: "rancher"
+rancher_port: 8443
+rancher_http_port: 8080
+
+# Automatic Architecture Mapping
+docker_arch_map:
+  x86_64: amd64
+  aarch64: arm64
+docker_arch: "{{ docker_arch_map[ansible_architecture] | default('amd64') }}"
+
+# Hardware requirements (for validation)
+rancher_min_vcpus: 2
+rancher_min_memory_mb: 3500
+
+# Initialization timeouts
+rancher_init_pause_seconds: 30
+rancher_api_wait_retries: 60
+rancher_api_wait_delay: 10
+# Full initialization wait (for API Aggregation to be ready)
+rancher_full_init_retries: 60
+rancher_full_init_delay: 10
+
+# UFW configuration
+rancher_configure_firewall: true
+
+# SSL/TLS Certificate configuration
+rancher_ssl_mode: "selfsigned"  # Options: selfsigned, provided, letsencrypt
+rancher_ssl_cert_dir: "/opt/rancher/ssl"
+
+# Self-signed certificate configuration
+rancher_ssl_selfsigned_common_name: "{{ rancher_public_ip | default(ansible_default_ipv4.address) }}"
+rancher_ssl_selfsigned_country: "US"
+rancher_ssl_selfsigned_state: "State"
+rancher_ssl_selfsigned_locality: "City"
+rancher_ssl_selfsigned_organization: "Rancher"
+rancher_ssl_selfsigned_days: 365
+
+# Provided certificate configuration (when rancher_ssl_mode: provided)
+# You must provide these files on the Ansible controller
+rancher_ssl_cert_path: ""  # Path to certificate file (e.g., /path/to/cert.pem)
+rancher_ssl_key_path: ""   # Path to private key file (e.g., /path/to/key.pem)
+rancher_ssl_chain_path: "" # Optional: Path to CA chain file (e.g., /path/to/chain.pem)
+
+# Let's Encrypt configuration (when rancher_ssl_mode: letsencrypt)
+rancher_letsencrypt_email: ""  # Your email for Let's Encrypt notifications
+rancher_letsencrypt_domain: "" # Domain name for the certificate
+rancher_letsencrypt_staging: false  # Use staging server for testing
+
+# Testing mode (skip container deployment for Molecule tests)
+# Set to true to skip Rancher container deployment (useful for Docker-in-Docker tests)
+rancher_skip_container_deploy: false

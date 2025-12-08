@@ -1,0 +1,17 @@
+---
+skip_list:
+  - yaml[line-length]
+  - name[casing]
+  - fqcn[action-core]
+
+warn_list:
+  - experimental
+  - ignore-errors
+  - no-handler
+
+exclude_paths:
+  - .cache/
+  - .github/
+  - molecule/
+
+use_default_rules: true
