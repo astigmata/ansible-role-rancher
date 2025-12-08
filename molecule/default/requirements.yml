@@ -1,0 +1,5 @@
+---
+collections:
+  - name: community.general
+  - name: community.docker
+  - name: community.crypto  # Required for modern certificate management

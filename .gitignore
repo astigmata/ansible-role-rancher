@@ -1,0 +1,29 @@
+# Vagrant
+.vagrant/
+*.box
+
+# Test variables (can be customized locally)
+# test_vars.yml is tracked but can be overridden
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pytest_cache/
+
+# Molecule
+.cache/
+.molecule/
+
+# Ansible
+*.retry
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

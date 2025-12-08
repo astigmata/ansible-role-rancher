@@ -1,0 +1,109 @@
+---
+# ---------------------------------------------------------
+# PROVIDED CERTIFICATE INSTALLATION
+# ---------------------------------------------------------
+- name: Validate provided certificate configuration
+  ansible.builtin.assert:
+    that:
+      - rancher_ssl_cert_path is defined
+      - rancher_ssl_cert_path | length > 0
+      - rancher_ssl_key_path is defined
+      - rancher_ssl_key_path | length > 0
+    fail_msg: "You must set rancher_ssl_cert_path and rancher_ssl_key_path when using 'provided' mode"
+
+- name: Check if certificate file exists on controller
+  ansible.builtin.stat:
+    path: "{{ rancher_ssl_cert_path }}"
+  delegate_to: localhost
+  register: local_cert_file
+
+- name: Check if key file exists on controller
+  ansible.builtin.stat:
+    path: "{{ rancher_ssl_key_path }}"
+  delegate_to: localhost
+  register: local_key_file
+
+- name: Validate certificate files exist
+  ansible.builtin.assert:
+    that:
+      - local_cert_file.stat.exists
+      - local_key_file.stat.exists
+    fail_msg: "Certificate or key file not found on Ansible controller"
+
+- name: Copy certificate to server
+  ansible.builtin.copy:
+    src: "{{ rancher_ssl_cert_path }}"
+    dest: "{{ rancher_ssl_cert_dir }}/cert.pem"
+    mode: '0644'
+    owner: root
+    group: root
+
+- name: Copy private key to server
+  ansible.builtin.copy:
+    src: "{{ rancher_ssl_key_path }}"
+    dest: "{{ rancher_ssl_cert_dir }}/key.pem"
+    mode: '0600'
+    owner: root
+    group: root
+
+- name: Copy CA chain if provided
+  ansible.builtin.copy:
+    src: "{{ rancher_ssl_chain_path }}"
+    dest: "{{ rancher_ssl_cert_dir }}/chain.pem"
+    mode: '0644'
+    owner: root
+    group: root
+  when:
+    - rancher_ssl_chain_path is defined
+    - rancher_ssl_chain_path | length > 0
+
+- name: Build full certificate chain
+  community.crypto.certificate_complete_chain:
+    input_chain: "{{ rancher_ssl_cert_dir }}/cert.pem"
+    root_certificates:
+      - "{{ rancher_ssl_cert_dir }}/chain.pem"
+  register: complete_chain
+  when:
+    - rancher_ssl_chain_path is defined
+    - rancher_ssl_chain_path | length > 0
+
+- name: Write full chain certificate
+  ansible.builtin.copy:
+    content: "{{ complete_chain.complete_chain | join('\n') }}"
+    dest: "{{ rancher_ssl_cert_dir }}/fullchain.pem"
+    mode: '0644'
+    owner: root
+    group: root
+  when:
+    - rancher_ssl_chain_path is defined
+    - rancher_ssl_chain_path | length > 0
+    - complete_chain is defined
+
+- name: Use cert as fullchain if no chain provided
+  ansible.builtin.copy:
+    src: "{{ rancher_ssl_cert_dir }}/cert.pem"
+    dest: "{{ rancher_ssl_cert_dir }}/fullchain.pem"
+    remote_src: true
+    mode: '0644'
+    owner: root
+    group: root
+  when: rancher_ssl_chain_path is not defined or rancher_ssl_chain_path | length == 0
+
+- name: Verify certificate matches private key
+  ansible.builtin.shell: |
+    set -o pipefail
+    CERT_MD5=$(openssl x509 -noout -modulus -in {{ rancher_ssl_cert_dir }}/cert.pem | openssl md5)
+    KEY_MD5=$(openssl rsa -noout -modulus -in {{ rancher_ssl_cert_dir }}/key.pem | openssl md5)
+    if [ "$CERT_MD5" != "$KEY_MD5" ]; then
+      echo "Certificate and key do not match!"
+      exit 1
+    fi
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+- name: Display provided certificate information
+  ansible.builtin.debug:
+    msg:
+      - "Using provided SSL certificate"
+      - "Make sure your domain points to this server's IP"

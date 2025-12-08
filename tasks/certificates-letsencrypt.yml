@@ -1,0 +1,83 @@
+---
+# ---------------------------------------------------------
+# LET'S ENCRYPT CERTIFICATE WITH CERTBOT
+# ---------------------------------------------------------
+- name: Validate Let's Encrypt configuration
+  ansible.builtin.assert:
+    that:
+      - rancher_letsencrypt_email is defined
+      - rancher_letsencrypt_email | length > 0
+      - rancher_letsencrypt_domain is defined
+      - rancher_letsencrypt_domain | length > 0
+    fail_msg: "You must set rancher_letsencrypt_email and rancher_letsencrypt_domain when using 'letsencrypt' mode"
+
+- name: Install certbot
+  ansible.builtin.package:
+    name:
+      - certbot
+      - python3-certbot-nginx
+    state: present
+
+- name: Stop Rancher temporarily for certificate generation
+  community.docker.docker_container:
+    name: "{{ rancher_container_name }}"
+    state: stopped
+  when: rancher_container_info is defined and rancher_container_info.exists
+  failed_when: false
+
+- name: Check if Let's Encrypt certificate already exists
+  ansible.builtin.stat:
+    path: "/etc/letsencrypt/live/{{ rancher_letsencrypt_domain }}/fullchain.pem"
+  register: letsencrypt_cert
+
+- name: Obtain Let's Encrypt certificate
+  ansible.builtin.command: >
+    certbot certonly --standalone
+    --non-interactive
+    --agree-tos
+    --email {{ rancher_letsencrypt_email }}
+    -d {{ rancher_letsencrypt_domain }}
+    {% if rancher_letsencrypt_staging %}--staging{% endif %}
+  when: not letsencrypt_cert.stat.exists
+  changed_when: true
+
+- name: Copy Let's Encrypt certificate
+  ansible.builtin.copy:
+    src: "/etc/letsencrypt/live/{{ rancher_letsencrypt_domain }}/fullchain.pem"
+    dest: "{{ rancher_ssl_cert_dir }}/cert.pem"
+    remote_src: true
+    mode: '0644'
+    owner: root
+    group: root
+
+- name: Copy Let's Encrypt private key
+  ansible.builtin.copy:
+    src: "/etc/letsencrypt/live/{{ rancher_letsencrypt_domain }}/privkey.pem"
+    dest: "{{ rancher_ssl_cert_dir }}/key.pem"
+    remote_src: true
+    mode: '0600'
+    owner: root
+    group: root
+
+- name: Create combined certificate file
+  ansible.builtin.shell: >
+    cat {{ rancher_ssl_cert_dir }}/cert.pem {{ rancher_ssl_cert_dir }}/key.pem
+    > {{ rancher_ssl_cert_dir }}/tls.pem
+  args:
+    creates: "{{ rancher_ssl_cert_dir }}/tls.pem"
+
+- name: Set up automatic renewal
+  ansible.builtin.cron:
+    name: "Renew Let's Encrypt certificates"
+    minute: "0"
+    hour: "3"
+    day: "*/7"
+    job: "certbot renew --quiet --deploy-hook 'docker restart {{ rancher_container_name }}'"
+
+- name: Display Let's Encrypt certificate information
+  ansible.builtin.debug:
+    msg:
+      - "Using Let's Encrypt certificate"
+      - "Domain: {{ rancher_letsencrypt_domain }}"
+      - "Auto-renewal configured (weekly check)"
+      - "{% if rancher_letsencrypt_staging %}WARNING: Using staging server (not trusted){% endif %}"

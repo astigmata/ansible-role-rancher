@@ -1,0 +1,48 @@
+---
+# ---------------------------------------------------------
+# SSL/TLS CERTIFICATE MANAGEMENT
+# ---------------------------------------------------------
+- name: Create SSL certificate directory
+  ansible.builtin.file:
+    path: "{{ rancher_ssl_cert_dir }}"
+    state: directory
+    mode: '0755'
+    owner: root
+    group: root
+
+- name: Include self-signed certificate tasks
+  ansible.builtin.include_tasks: certificates-selfsigned.yml
+  when: rancher_ssl_mode == 'selfsigned'
+
+- name: Include provided certificate tasks
+  ansible.builtin.include_tasks: certificates-provided.yml
+  when: rancher_ssl_mode == 'provided'
+
+- name: Include Let's Encrypt certificate tasks
+  ansible.builtin.include_tasks: certificates-letsencrypt.yml
+  when: rancher_ssl_mode == 'letsencrypt'
+
+- name: Check certificate files exist
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  register: cert_files_check
+  loop:
+    - "{{ rancher_ssl_cert_dir }}/cert.pem"
+    - "{{ rancher_ssl_cert_dir }}/key.pem"
+
+- name: Assert certificate files exist
+  ansible.builtin.assert:
+    that:
+      - cert_files_check.results | selectattr('stat.exists') | list | length == 2
+    fail_msg: "Certificate or key file is missing in {{ rancher_ssl_cert_dir }}"
+    success_msg: "Certificate and key files verified successfully"
+
+- name: Display certificate information
+  ansible.builtin.command: >
+    openssl x509 -in {{ rancher_ssl_cert_dir }}/cert.pem -noout -subject -dates
+  register: cert_info
+  changed_when: false
+
+- name: Show certificate details
+  ansible.builtin.debug:
+    msg: "{{ cert_info.stdout_lines }}"

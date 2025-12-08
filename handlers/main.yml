@@ -1,0 +1,7 @@
+---
+- name: Notify user about Docker group change
+  ansible.builtin.debug:
+    msg:
+      - "User has been added to the Docker group."
+      - "You may need to log out and back in for this to take effect."
+      - "Or run: newgrp docker"

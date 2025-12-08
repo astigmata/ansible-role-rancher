@@ -1,0 +1,54 @@
+---
+dependency:
+  name: galaxy
+  options:
+    requirements-file: ../../molecule/default/requirements.yml
+
+driver:
+  name: vagrant
+  provider:
+    name: virtualbox
+
+platforms:
+  - name: rancher-ubuntu-2204
+    box: bento/ubuntu-22.04
+    memory: 4096
+    cpus: 2
+    provider_options:
+      linked_clone: true
+    interfaces:
+      - auto_config: true
+        network_name: private_network
+        type: dhcp
+
+provisioner:
+  name: ansible
+  config_options:
+    defaults:
+      callbacks_enabled: profile_tasks,timer
+  inventory:
+    host_vars:
+      rancher-ubuntu-2204:
+        rancher_bootstrap_password: "TestPassword123!"
+        rancher_configure_firewall: false
+  playbooks:
+    converge: converge.yml
+    verify: verify.yml
+
+verifier:
+  name: ansible
+
+scenario:
+  name: vagrant
+  test_sequence:
+    - dependency
+    - cleanup
+    - destroy
+    - syntax
+    - create
+    - prepare
+    - converge
+    - idempotence
+    - verify
+    - cleanup
+    - destroy
