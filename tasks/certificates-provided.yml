@@ -57,29 +57,37 @@
     - rancher_ssl_chain_path is defined
     - rancher_ssl_chain_path | length > 0
 
-- name: Create full chain certificate
-  ansible.builtin.shell: >
-    cat {{ rancher_ssl_cert_dir }}/cert.pem
-    {% if rancher_ssl_chain_path is defined and rancher_ssl_chain_path | length > 0 %}
-    {{ rancher_ssl_cert_dir }}/chain.pem
-    {% endif %}
-    > {{ rancher_ssl_cert_dir }}/fullchain.pem
-  args:
-    creates: "{{ rancher_ssl_cert_dir }}/fullchain.pem"
+- name: Build full certificate chain
+  community.crypto.certificate_complete_chain:
+    input_chain: "{{ rancher_ssl_cert_dir }}/cert.pem"
+    root_certificates:
+      - "{{ rancher_ssl_cert_dir }}/chain.pem"
+  register: complete_chain
+  when:
+    - rancher_ssl_chain_path is defined
+    - rancher_ssl_chain_path | length > 0
 
-- name: Create combined certificate file (cert + key)
-  ansible.builtin.shell: >
-    cat {{ rancher_ssl_cert_dir }}/fullchain.pem {{ rancher_ssl_cert_dir }}/key.pem
-    > {{ rancher_ssl_cert_dir }}/tls.pem
-  args:
-    creates: "{{ rancher_ssl_cert_dir }}/tls.pem"
-
-- name: Set combined file permissions
-  ansible.builtin.file:
-    path: "{{ rancher_ssl_cert_dir }}/tls.pem"
-    mode: '0600'
+- name: Write full chain certificate
+  ansible.builtin.copy:
+    content: "{{ complete_chain.complete_chain | join('\n') }}"
+    dest: "{{ rancher_ssl_cert_dir }}/fullchain.pem"
+    mode: '0644'
     owner: root
     group: root
+  when:
+    - rancher_ssl_chain_path is defined
+    - rancher_ssl_chain_path | length > 0
+    - complete_chain is defined
+
+- name: Use cert as fullchain if no chain provided
+  ansible.builtin.copy:
+    src: "{{ rancher_ssl_cert_dir }}/cert.pem"
+    dest: "{{ rancher_ssl_cert_dir }}/fullchain.pem"
+    remote_src: true
+    mode: '0644'
+    owner: root
+    group: root
+  when: rancher_ssl_chain_path is not defined or rancher_ssl_chain_path | length == 0
 
 - name: Verify certificate matches private key
   ansible.builtin.shell: |

@@ -1,5 +1,8 @@
 ---
 # Rancher configuration
+# WARNING: "stable" is convenient for testing but NOT recommended for production.
+# For production, pin to a specific version (e.g., "v2.8.5") to avoid unexpected breaking changes.
+# See: https://github.com/rancher/rancher/releases
 rancher_version: "stable"
 rancher_data_volume: "rancher_data"
 rancher_container_name: "rancher"
@@ -17,8 +20,8 @@ rancher_min_vcpus: 2
 rancher_min_memory_mb: 3500
 
 # Initialization timeouts
-rancher_init_pause_seconds: 30
-rancher_api_wait_retries: 60
+# Note: No arbitrary pause - we rely on proper API polling with retries
+rancher_api_wait_retries: 90  # Increased from 60 to compensate for removed pause
 rancher_api_wait_delay: 10
 # Full initialization wait (for API Aggregation to be ready)
 rancher_full_init_retries: 60

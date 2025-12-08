@@ -1,20 +1,33 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
+require 'yaml'
+
 # -----------------------------------------------------------------------
-# VARIABLES DE CONFIGURATION GLOBALE
+# SINGLE SOURCE OF TRUTH - Configuration loaded from test_vars.yml
 # -----------------------------------------------------------------------
-RANCHER_IP = "192.168.56.15"
-RANCHER_PASSWORD = "admin123456789" # Mot de passe fort pour le bootstrap
+# This eliminates the need to maintain configuration in two places
+begin
+  test_vars = YAML.load_file('test_vars.yml')
+  RANCHER_IP = test_vars['rancher_public_ip']
+  RANCHER_PASSWORD = test_vars['rancher_bootstrap_password']
+rescue Errno::ENOENT
+  puts "ERROR: test_vars.yml not found!"
+  puts "Please create test_vars.yml with rancher_public_ip and rancher_bootstrap_password"
+  exit 1
+rescue => e
+  puts "ERROR: Failed to load test_vars.yml: #{e.message}"
+  exit 1
+end
 
 Vagrant.configure("2") do |config|
   config.vm.box = "bento/ubuntu-22.04"
   config.vm.hostname = "rancher-test"
 
-  # Configuration réseau avec IP fixe
+  # Network configuration with fixed IP
   config.vm.network "private_network", ip: RANCHER_IP
 
-  # Ressources
+  # VM Resources
   config.vm.provider "virtualbox" do |vb|
     vb.name = "rancher-test-vm"
     vb.memory = "4096"
@@ -22,7 +35,7 @@ Vagrant.configure("2") do |config|
     vb.linked_clone = true
   end
 
-  # Provisioning Ansible
+  # Ansible Provisioning
   config.vm.provision "ansible" do |ansible|
     ansible.playbook = "test_playbook.yml"
     ansible.verbose = "v"

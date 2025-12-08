@@ -10,7 +10,7 @@
       - curl
       - gnupg
       - lsb-release
-      - python3-docker
+      - python3-docker  # Preferred over pip for Docker Python library (avoids PEP 668 issues)
       - ntp
     state: present
     update_cache: true

@@ -1,62 +1,56 @@
 # Test configuration synchronization
 
-## Problem
+## ✅ Solution Implemented - Single Source of Truth
 
-Vagrant tests use **two configuration files**:
+**Good news!** The Vagrantfile now automatically reads configuration from `test_vars.yml`, eliminating the need to maintain values in two places.
 
-1. **`Vagrantfile`** - To create and provision the VM
-2. **`test_vars.yml`** - To verify deployment
+## How it works
 
-These two files must have the **same values** for IP and password.
+The Vagrantfile loads configuration from `test_vars.yml` at startup:
 
-## Default configuration
-
-### Vagrantfile (lines 7-8)
 ```ruby
-RANCHER_IP = "192.168.56.15"
-RANCHER_PASSWORD = "admin123456789"
+require 'yaml'
+test_vars = YAML.load_file('test_vars.yml')
+RANCHER_IP = test_vars['rancher_public_ip']
+RANCHER_PASSWORD = test_vars['rancher_bootstrap_password']
 ```
 
-### test_vars.yml
+**You only need to edit `test_vars.yml`** - the Vagrantfile will pick up the changes automatically!
+
+## Configuration
+
+### test_vars.yml (Single Source of Truth)
 ```yaml
 rancher_bootstrap_password: "admin123456789"
 rancher_public_ip: "192.168.56.15"
 rancher_configure_firewall: false
 ```
 
-## Why two files?
+## Benefits
 
-1. **Vagrantfile** is in Ruby and used by Vagrant to:
-   - Configure VM network
-   - Pass variables to Ansible provisioning
-
-2. **test_vars.yml** is in YAML and used by Ansible to:
-   - Verify that Rancher is accessible on the right IP
-   - Display the correct password in messages
+✅ **No duplication** - Edit only `test_vars.yml`
+✅ **No synchronization issues** - Vagrantfile reads from the same source
+✅ **Simple to maintain** - One file to update
+✅ **Error prevention** - Impossible to have mismatched values
 
 ## Modify configuration
 
-### Option 1: Edit everything manually
+Simply edit `test_vars.yml`:
 
 ```bash
-# 1. Edit Vagrantfile
-nano Vagrantfile
-# Change RANCHER_IP and RANCHER_PASSWORD
-
-# 2. Edit test_vars.yml
+# Edit the configuration file
 nano test_vars.yml
-# Change rancher_public_ip and rancher_bootstrap_password
 
-# 3. Verify values match!
-grep RANCHER Vagrantfile
-grep rancher test_vars.yml
+# Change the values as needed:
+# - rancher_public_ip: "192.168.56.20"
+# - rancher_bootstrap_password: "YourPassword123!"
 
-# 4. Recreate VM
+# Recreate VM (Vagrantfile will read the new values)
 vagrant destroy -f
 vagrant up
 ```
 
-### Option 2: Configuration script
+### Optional: Configuration script
 
 Create a `set-test-config.sh` script:
 
@@ -100,37 +94,13 @@ chmod +x set-test-config.sh
 ./set-test-config.sh 192.168.56.20 "MySecurePass123!"
 ```
 
-## Verify synchronization
+## Verify configuration
 
-### Verification script
+### View current settings
 
 ```bash
-#!/bin/bash
-# Verify Vagrantfile and test_vars.yml are synchronized
-
-VAGRANT_IP=$(grep 'RANCHER_IP =' Vagrantfile | cut -d'"' -f2)
-VAGRANT_PASS=$(grep 'RANCHER_PASSWORD =' Vagrantfile | cut -d'"' -f2)
-
-YAML_IP=$(grep 'rancher_public_ip:' test_vars.yml | awk '{print $2}' | tr -d '"')
-YAML_PASS=$(grep 'rancher_bootstrap_password:' test_vars.yml | awk '{print $2}' | tr -d '"')
-
-if [ "$VAGRANT_IP" = "$YAML_IP" ] && [ "$VAGRANT_PASS" = "$YAML_PASS" ]; then
-    echo "✓ Configuration synchronized"
-    echo "  IP: $VAGRANT_IP"
-    echo "  Password: ${VAGRANT_PASS:0:3}***"
-    exit 0
-else
-    echo "❌ Configuration NOT synchronized!"
-    echo ""
-    echo "Vagrantfile:"
-    echo "  IP: $VAGRANT_IP"
-    echo "  Password: ${VAGRANT_PASS:0:3}***"
-    echo ""
-    echo "test_vars.yml:"
-    echo "  IP: $YAML_IP"
-    echo "  Password: ${YAML_PASS:0:3}***"
-    exit 1
-fi
+# Simply check test_vars.yml (single source of truth)
+cat test_vars.yml
 ```
 
 ## Makefile with verification

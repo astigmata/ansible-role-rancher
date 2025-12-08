@@ -28,12 +28,7 @@
       env: strict
   when: not (rancher_skip_container_deploy | default(false) | bool)
 
-- name: Pause to allow Docker internal initialization
-  ansible.builtin.pause:
-    seconds: "{{ rancher_init_pause_seconds }}"
-  when: not (rancher_skip_container_deploy | default(false) | bool)
-
-- name: Wait for Rancher API availability
+- name: Wait for Rancher API availability (with increased retries instead of arbitrary pause)
   ansible.builtin.uri:
     url: "https://localhost:{{ rancher_port }}/ping"
     validate_certs: false

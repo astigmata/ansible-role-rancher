@@ -15,7 +15,13 @@ This Ansible role deploys Rancher Server in single node mode on Ubuntu with Dock
 ## Installing dependencies
 
 ```bash
+# Install required Ansible collections
 ansible-galaxy collection install -r requirements.yml
+
+# Required collections:
+# - community.general >= 7.0.0
+# - community.docker >= 3.0.0
+# - community.crypto >= 2.0.0 (for certificate management)
 ```
 
 ## Role variables
@@ -24,7 +30,7 @@ ansible-galaxy collection install -r requirements.yml
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `rancher_version` | `stable` | Rancher version to deploy |
+| `rancher_version` | `stable` | Rancher version to deploy (⚠️ See version pinning note below) |
 | `rancher_data_volume` | `rancher_data` | Docker volume name for data |
 | `rancher_container_name` | `rancher` | Rancher container name |
 | `rancher_port` | `8443` | HTTPS port for Rancher |
@@ -158,6 +164,30 @@ molecule test -s default
 **Duration:** 3-5 minutes | **Tests:** Infrastructure + Docker (skip Rancher container)
 
 For more details, see [TESTING.md](TESTING.md).
+
+## Important Notes
+
+### ⚠️ Version Pinning Recommendation
+
+The default `rancher_version: "stable"` is convenient for testing but **not recommended for production** environments. The `stable` tag is a moving target that can introduce breaking changes when Rancher releases a new major version.
+
+**For production, always pin to a specific version:**
+
+```yaml
+# ✅ RECOMMENDED for production
+rancher_version: "v2.8.5"
+
+# ❌ NOT RECOMMENDED for production (breaking changes possible)
+rancher_version: "stable"
+```
+
+**Benefits of version pinning:**
+- Predictable deployments
+- Control over upgrades
+- Avoid unexpected breaking changes
+- Easier rollback if needed
+
+Check available versions at: https://github.com/rancher/rancher/releases
 
 ## Features
 

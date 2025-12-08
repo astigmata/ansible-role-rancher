@@ -10,14 +10,18 @@
         cache_valid_time: 3600
       when: ansible_os_family == 'Debian'
 
-    - name: Install Python dependencies for Docker
+    - name: Install Docker Python library from system packages (preferred)
       ansible.builtin.package:
         name:
-          - python3-pip
+          - python3-docker
         state: present
+      register: system_docker_install
+      failed_when: false
 
-    - name: Install Docker Python library
+    - name: Install Docker Python library via pip (fallback for older systems)
       ansible.builtin.pip:
         name:
           - docker>=5.0.0
         state: present
+        break_system_packages: true  # Required for Ubuntu 24.04+ (PEP 668)
+      when: system_docker_install is failed
