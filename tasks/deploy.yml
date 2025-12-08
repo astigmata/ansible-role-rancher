@@ -28,7 +28,7 @@
       env: strict
   when: not (rancher_skip_container_deploy | default(false) | bool)
 
-- name: Wait for Rancher API availability (with increased retries instead of arbitrary pause)
+- name: Wait for Rancher API availability
   ansible.builtin.uri:
     url: "https://localhost:{{ rancher_port }}/ping"
     validate_certs: false
@@ -38,6 +38,25 @@
   until: result.status == 200
   retries: "{{ rancher_api_wait_retries }}"
   delay: "{{ rancher_api_wait_delay }}"
+  when: not (rancher_skip_container_deploy | default(false) | bool)
+
+- name: Verify API stability (check multiple times to avoid K3s restarts)
+  ansible.builtin.uri:
+    url: "https://localhost:{{ rancher_port }}/ping"
+    validate_certs: false
+    status_code: 200
+    follow_redirects: none
+  register: stability_check
+  failed_when: false
+  loop: "{{ range(1, 4) | list }}"
+  delay: 5
+  when: not (rancher_skip_container_deploy | default(false) | bool)
+
+- name: Ensure API remained stable
+  ansible.builtin.assert:
+    that: stability_check.results | selectattr('status', 'equalto', 200) | list | length == 3
+    fail_msg: "API unstable - K3s may still be initializing or restarting"
+    success_msg: "API confirmed stable across multiple checks"
   when: not (rancher_skip_container_deploy | default(false) | bool)
 
 - name: Wait for Rancher complete initialization

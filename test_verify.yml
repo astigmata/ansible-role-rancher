@@ -40,7 +40,10 @@
 
     - name: Get private network IP
       ansible.builtin.set_fact:
-        rancher_access_ip: "{{ rancher_public_ip | default(ansible_all_ipv4_addresses | select('match', '^192\\.168\\.') | first) }}"
+        rancher_access_ip: >-
+          {{ rancher_public_ip |
+          default(ansible_all_ipv4_addresses |
+          select('match', '^192\\.168\\.') | first) }}
 
     - name: Display success message
       ansible.builtin.debug:

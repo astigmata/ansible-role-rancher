@@ -1,6 +1,5 @@
 ---
 skip_list:
-  - yaml[line-length]
   - name[casing]
   - fqcn[action-core]
 

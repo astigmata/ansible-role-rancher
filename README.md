@@ -30,7 +30,7 @@ ansible-galaxy collection install -r requirements.yml
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `rancher_version` | `stable` | Rancher version to deploy (⚠️ See version pinning note below) |
+| `rancher_version` | `stable` | Rancher version to deploy (see version management below) |
 | `rancher_data_volume` | `rancher_data` | Docker volume name for data |
 | `rancher_container_name` | `rancher` | Rancher container name |
 | `rancher_port` | `8443` | HTTPS port for Rancher |
@@ -167,19 +167,28 @@ For more details, see [TESTING.md](TESTING.md).
 
 ## Important Notes
 
-### ⚠️ Version Pinning Recommendation
+### ⚠️ Version Management
 
-The default `rancher_version: "stable"` is convenient for testing but **not recommended for production** environments. The `stable` tag is a moving target that can introduce breaking changes when Rancher releases a new major version.
+The role defaults to **`stable`** which points to the latest stable release tested by Rancher. While this provides maximum compatibility, **production environments should pin to a specific version**.
 
-**For production, always pin to a specific version:**
+**Version options:**
 
 ```yaml
-# ✅ RECOMMENDED for production
-rancher_version: "v2.8.5"
-
-# ❌ NOT RECOMMENDED for production (breaking changes possible)
+# Default: Stable tag (tested by Rancher, but can change)
 rancher_version: "stable"
+
+# Recommended for production: Pin to specific version
+rancher_version: "v2.9.3"   # LTS version
+rancher_version: "v2.10.2"  # Specific stable version
+
+# Latest (bleeding edge, not recommended)
+rancher_version: "latest"
 ```
+
+**Find available versions:**
+- Docker Hub tags: https://hub.docker.com/r/rancher/rancher/tags
+- GitHub releases: https://github.com/rancher/rancher/releases
+- **Note:** GitHub release versions may differ from Docker Hub tags
 
 **Benefits of version pinning:**
 - Predictable deployments

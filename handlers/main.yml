@@ -2,6 +2,9 @@
 - name: Notify user about Docker group change
   ansible.builtin.debug:
     msg:
-      - "User has been added to the Docker group."
-      - "You may need to log out and back in for this to take effect."
-      - "Or run: newgrp docker"
+      - "IMPORTANT: Docker group membership updated"
+      - "The current SSH session will NOT have docker access immediately"
+      - "You must either:"
+      - "  1. Log out and log back in (recommended)"
+      - "  2. Run 'newgrp docker' in your shell"
+      - "  3. Use 'sudo' for docker commands until next login"

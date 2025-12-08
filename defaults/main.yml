@@ -1,9 +1,10 @@
 ---
 # Rancher configuration
-# WARNING: "stable" is convenient for testing but NOT recommended for production.
-# For production, pin to a specific version (e.g., "v2.8.5") to avoid unexpected breaking changes.
-# See: https://github.com/rancher/rancher/releases
-rancher_version: "stable"
+# Using "stable" tag for maximum compatibility while maintaining production reliability
+# The "stable" tag points to the latest stable release tested by Rancher
+# For version pinning: Check Docker Hub tags at https://hub.docker.com/r/rancher/rancher/tags
+# Example pinned versions: "v2.9.3" (LTS), "v2.10.2", "latest"
+rancher_version: "stable"  # Safe default - points to latest stable tested release
 rancher_data_volume: "rancher_data"
 rancher_container_name: "rancher"
 rancher_port: 8443
