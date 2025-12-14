@@ -1,0 +1,317 @@
+---
+# =============================================================================
+# Create RKE2 Cluster via Rancher API with Docker Registry Mirrors
+# =============================================================================
+# This playbook creates an RKE2 cluster using Rancher's provisioning API
+# and configures Docker registry mirrors for quay.io and docker.io
+#
+# Requirements:
+#   - Rancher 2.6+ server accessible and running
+#   - Admin credentials for Rancher API
+#
+# Usage:
+#   ansible-playbook playbooks/create-rke2-cluster.yml
+#
+#   # Or with custom parameters:
+#   ansible-playbook playbooks/create-rke2-cluster.yml \
+#     -e rancher_url=https://192.168.56.10:8443 \
+#     -e rancher_admin_password=admin123456789 \
+#     -e cluster_name=my-rke2-cluster \
+#     -e registry_mirror=docker-proxy.office.toto.fr
+# =============================================================================
+
+- name: Create RKE2 Cluster with Registry Mirrors via Rancher API
+  hosts: localhost
+  gather_facts: false
+
+  vars:
+    # Rancher API Configuration
+    rancher_url: "https://192.168.56.10:8443"
+    rancher_admin_user: "admin"
+    rancher_admin_password: "admin123456789"
+    rancher_verify_ssl: false
+
+    # Cluster Configuration
+    cluster_name: "rke2-cluster"
+    kubernetes_version: "v1.28.15+rke2r1"
+
+    # Registry Configuration
+    registry_mirror: "docker-proxy.office.toto.fr"
+    registry_mirrors:
+      - source: "docker.io"
+        mirror: "{{ registry_mirror }}"
+      - source: "quay.io"
+        mirror: "{{ registry_mirror }}"
+
+    # Registry TLS Configuration
+    registry_insecure_skip_verify: false
+
+    # Cloud Provider (none for bare metal)
+    cloud_provider: ""
+
+    # Network Configuration
+    cluster_cidr: "10.42.0.0/16"
+    service_cidr: "10.43.0.0/16"
+    cluster_dns: "10.43.0.10"
+
+  tasks:
+    # =========================================================================
+    # STEP 1: Authenticate with Rancher API
+    # =========================================================================
+    - name: Login to Rancher API
+      ansible.builtin.uri:
+        url: "{{ rancher_url }}/v3-public/localProviders/local?action=login"
+        method: POST
+        body_format: json
+        body:
+          username: "{{ rancher_admin_user }}"
+          password: "{{ rancher_admin_password }}"
+        validate_certs: "{{ rancher_verify_ssl }}"
+        status_code: 201
+      register: rancher_login
+
+    - name: Extract Rancher API token
+      ansible.builtin.set_fact:
+        rancher_token: "{{ rancher_login.json.token }}"
+
+    - name: Display authentication status
+      ansible.builtin.debug:
+        msg: "✓ Successfully authenticated to Rancher API"
+
+    # =========================================================================
+    # STEP 2: Build Registry Configuration
+    # =========================================================================
+    - name: Build registry mirrors configuration
+      ansible.builtin.set_fact:
+        registry_mirrors_config: "{{ registry_mirrors_config | default({}) | combine({item.source: {'endpoint': ['https://' + item.mirror]}}) }}"
+      loop: "{{ registry_mirrors }}"
+
+    - name: Build registry configs (TLS settings)
+      ansible.builtin.set_fact:
+        registry_configs: >-
+          {{
+            {
+              registry_mirror: {
+                'tls': {
+                  'insecure_skip_verify': registry_insecure_skip_verify
+                }
+              }
+            }
+          }}
+
+    - name: Build complete registries configuration
+      ansible.builtin.set_fact:
+        registries_config:
+          mirrors: "{{ registry_mirrors_config }}"
+          configs: "{{ registry_configs }}"
+
+    - name: Display registry configuration
+      ansible.builtin.debug:
+        msg:
+          - "Registry mirrors configuration:"
+          - "{{ registries_config | to_nice_yaml }}"
+
+    # =========================================================================
+    # STEP 3: Check if Cluster Already Exists
+    # =========================================================================
+    - name: Check if cluster already exists
+      ansible.builtin.uri:
+        url: "{{ rancher_url }}/v1/provisioning.cattle.io.clusters/fleet-default/{{ cluster_name }}"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ rancher_token }}"
+        validate_certs: "{{ rancher_verify_ssl }}"
+        status_code: [200, 404]
+      register: cluster_check
+      failed_when: false
+
+    - name: Display cluster check result
+      ansible.builtin.debug:
+        msg: "{{ 'Cluster already exists, skipping creation' if cluster_check.status == 200 else 'Creating new cluster' }}"
+
+    # =========================================================================
+    # STEP 4: Create RKE2 Cluster
+    # =========================================================================
+    - name: Create RKE2 cluster with registry mirrors
+      ansible.builtin.uri:
+        url: "{{ rancher_url }}/v1/provisioning.cattle.io.clusters"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ rancher_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          type: "provisioning.cattle.io.cluster"
+          metadata:
+            namespace: "fleet-default"
+            name: "{{ cluster_name }}"
+          spec:
+            kubernetesVersion: "{{ kubernetes_version }}"
+            rkeConfig:
+              chartValues:
+                rke2-calico: {}
+              machineGlobalConfig:
+                cni: "calico"
+                disable-kube-proxy: false
+                etcd-expose-metrics: false
+                profile: null
+              machineSelectorConfig:
+                - config:
+                    protect-kernel-defaults: false
+              registries: "{{ registries_config }}"
+              upgradeStrategy:
+                controlPlaneConcurrency: "1"
+                controlPlaneDrainOptions:
+                  timeout: 0
+                  deleteEmptyDirData: true
+                  disableEviction: false
+                  enabled: false
+                  force: false
+                  gracePeriod: -1
+                  ignoreDaemonSets: true
+                  skipWaitForDeleteTimeoutSeconds: 0
+                workerConcurrency: "1"
+                workerDrainOptions:
+                  timeout: 0
+                  deleteEmptyDirData: true
+                  disableEviction: false
+                  enabled: false
+                  force: false
+                  gracePeriod: -1
+                  ignoreDaemonSets: true
+                  skipWaitForDeleteTimeoutSeconds: 0
+            machineSelectorConfig:
+              - config: {}
+        validate_certs: "{{ rancher_verify_ssl }}"
+        status_code: [201]
+      when: cluster_check.status == 404
+      register: cluster_create
+
+    - name: Display cluster creation status
+      ansible.builtin.debug:
+        msg: "✓ RKE2 cluster '{{ cluster_name }}' created successfully"
+      when: cluster_check.status == 404
+
+    - name: Use existing cluster details
+      ansible.builtin.set_fact:
+        cluster_details: "{{ cluster_check }}"
+      when: cluster_check.status == 200
+
+    # =========================================================================
+    # STEP 5: Get Cluster Registration Token
+    # =========================================================================
+    - name: Wait for cluster to initialize
+      ansible.builtin.pause:
+        seconds: 5
+      when: cluster_check.status == 404
+
+    - name: Get cluster details for newly created cluster
+      ansible.builtin.uri:
+        url: "{{ rancher_url }}/v1/provisioning.cattle.io.clusters/fleet-default/{{ cluster_name }}"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ rancher_token }}"
+        validate_certs: "{{ rancher_verify_ssl }}"
+      register: cluster_details_new
+      when: cluster_check.status == 404
+
+    - name: Set cluster details from newly created cluster
+      ansible.builtin.set_fact:
+        cluster_details: "{{ cluster_details_new }}"
+      when: cluster_check.status == 404
+
+    - name: Get cluster registration token
+      ansible.builtin.uri:
+        url: "{{ rancher_url }}/v3/clusterregistrationtokens?clusterId={{ cluster_details.json.status.clusterName }}"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ rancher_token }}"
+        validate_certs: "{{ rancher_verify_ssl }}"
+      register: registration_tokens
+      until: registration_tokens.json.data | length > 0
+      retries: 30
+      delay: 2
+
+    - name: Extract registration commands
+      ansible.builtin.set_fact:
+        node_command: "{{ registration_tokens.json.data[0].nodeCommand }}"
+        insecure_node_command: "{{ registration_tokens.json.data[0].insecureNodeCommand }}"
+
+    # =========================================================================
+    # STEP 6: Display Deployment Summary
+    # =========================================================================
+    - name: Display deployment summary
+      ansible.builtin.debug:
+        msg:
+          - "======================================================="
+          - "RKE2 Cluster Creation Summary"
+          - "======================================================="
+          - "Cluster Name: {{ cluster_name }}"
+          - "Kubernetes Version: {{ kubernetes_version }}"
+          - "Cluster ID: {{ cluster_details.json.status.clusterName }}"
+          - ""
+          - "Registry Mirror Configuration:"
+          - "  Registry: {{ registry_mirror }}"
+          - "  Mirrors:"
+          - "    - docker.io -> https://{{ registry_mirror }}"
+          - "    - quay.io -> https://{{ registry_mirror }}"
+          - "  TLS Insecure Skip Verify: {{ registry_insecure_skip_verify }}"
+          - ""
+          - "======================================================="
+          - "IMPORTANT: Add Nodes to the Cluster"
+          - "======================================================="
+          - ""
+          - "To add nodes to this cluster, run the following command"
+          - "on each node you want to add:"
+          - ""
+          - "For nodes with proper certificates:"
+          - "{{ node_command }}"
+          - ""
+          - "For testing with self-signed certificates:"
+          - "{{ insecure_node_command }}"
+          - ""
+          - "======================================================="
+          - "Verify cluster status:"
+          - "  - Rancher UI: {{ rancher_url }}/dashboard/c/{{ cluster_details.json.status.clusterName }}/explorer"
+          - "  - API: {{ rancher_url }}/v1/provisioning.cattle.io.clusters/fleet-default/{{ cluster_name }}"
+          - "======================================================="
+
+    - name: Get current timestamp
+      ansible.builtin.command: date -Iseconds
+      register: current_timestamp
+      changed_when: false
+
+    - name: Save registration commands to file
+      ansible.builtin.copy:
+        content: |
+          # RKE2 Cluster Registration Commands
+          # Cluster: {{ cluster_name }}
+          # Created: {{ current_timestamp.stdout }}
+
+          # Registry Configuration
+          Registry Mirror: {{ registry_mirror }}
+          Mirrors:
+            - docker.io -> https://{{ registry_mirror }}
+            - quay.io -> https://{{ registry_mirror }}
+
+          # Node Registration Command (Secure)
+          {{ node_command }}
+
+          # Node Registration Command (Insecure - for testing only)
+          {{ insecure_node_command }}
+
+          # Cluster Details
+          Cluster ID: {{ cluster_details.json.status.clusterName }}
+          Rancher URL: {{ rancher_url }}
+
+          # Next Steps
+          1. Run the node registration command on each server you want to add to the cluster
+          2. Wait for nodes to appear in Rancher UI
+          3. Configure node roles (controlplane, etcd, worker) as needed
+          4. Wait for cluster to become Active
+        dest: "{{ playbook_dir }}/../{{ cluster_name }}-registration.txt"
+      delegate_to: localhost
+
+    - name: Display file saved message
+      ansible.builtin.debug:
+        msg: "✓ Registration commands saved to: {{ cluster_name }}-registration.txt"

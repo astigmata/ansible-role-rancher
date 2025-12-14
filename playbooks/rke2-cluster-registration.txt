@@ -1,0 +1,19 @@
+# RKE2 Cluster Registration Commands
+# Cluster: rke2-cluster
+# Created: 2025-12-14T23:35:21+01:00
+
+# Registry Configuration
+Registry Mirror: docker-proxy.office.toto.fr
+Mirrors:
+  - docker.io -> https://docker-proxy.office.toto.fr
+  - quay.io -> https://docker-proxy.office.toto.fr
+
+# Node Registration Command (Secure)
+ curl -fL https://192.168.56.10:8443/system-agent-install.sh | sudo  sh -s - --server https://192.168.56.10:8443 --label 'cattle.io/os=linux' --token zcw8gjcjq4s8p789ktqrhrvnlgvrdzlcf2zntmrpnjz99mnfg2c9th
+
+# Node Registration Command (Insecure - for testing only)
+ curl --insecure -fL https://192.168.56.10:8443/system-agent-install.sh | sudo  sh -s - --server https://192.168.56.10:8443 --label 'cattle.io/os=linux' --token zcw8gjcjq4s8p789ktqrhrvnlgvrdzlcf2zntmrpnjz99mnfg2c9th
+
+# Cluster Details
+Cluster ID: c-m-z9q5l5mg
+Rancher URL: https://192.168.56.10:8443

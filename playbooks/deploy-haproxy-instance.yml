@@ -1,0 +1,104 @@
+---
+# =============================================================================
+# Deploy Single HAProxy Ingress Instance (included task)
+# =============================================================================
+# This file is included by deploy-haproxy-multi.yml for each instance
+# Variable 'instance' contains the configuration for this HAProxy instance
+# =============================================================================
+
+- name: "Build Helm values structure for {{ instance.name }}"
+  ansible.builtin.set_fact:
+    helm_values:
+      controller:
+        kind: "{{ instance.kind }}"
+        ingressClass: "{{ instance.ingress_class }}"
+        ingressClassResource:
+          name: "{{ instance.ingress_class }}"
+          enabled: true
+          default: false
+        extraArgs: "{{ ['--disable-ipv6'] if (instance.disable_ipv6 | default(true)) else [] }}"
+        service:
+          type: "{{ instance.service_type | default('LoadBalancer') }}"
+        resources:
+          requests:
+            cpu: "{{ instance.resources.requests.cpu | default('100m') }}"
+            memory: "{{ instance.resources.requests.memory | default('128Mi') }}"
+          limits:
+            cpu: "{{ instance.resources.limits.cpu | default('500m') }}"
+            memory: "{{ instance.resources.limits.memory | default('512Mi') }}"
+        logging:
+          level: "{{ instance.logging_level | default('info') }}"
+      defaultBackend:
+        enabled: "{{ instance.default_backend.enabled | default(true) }}"
+        replicaCount: "{{ instance.default_backend.replicas | default(1) }}"
+
+- name: "Add replicaCount for Deployment kind ({{ instance.name }})"
+  ansible.builtin.set_fact:
+    helm_values: "{{ helm_values | combine({'controller': helm_values.controller | combine({'replicaCount': instance.replicas | default(2)})}, recursive=True) }}"
+  when: instance.kind == 'Deployment'
+
+- name: "Add externalTrafficPolicy for {{ instance.name }}"
+  ansible.builtin.set_fact:
+    helm_values: "{{ helm_values | combine({'controller': helm_values.controller | combine({'service': helm_values.controller.service | combine({'externalTrafficPolicy': instance.external_traffic_policy})})}, recursive=True) }}"
+  when: instance.external_traffic_policy is defined and instance.external_traffic_policy != 'Cluster'
+
+- name: "Convert values to YAML for {{ instance.name }}"
+  ansible.builtin.set_fact:
+    instance_values_yaml: "{{ helm_values | to_nice_yaml }}"
+
+- name: "Display configuration for {{ instance.name }}"
+  ansible.builtin.debug:
+    msg:
+      - "Deploying HAProxy instance: {{ instance.name }}"
+      - "  - Kind: {{ instance.kind }}"
+      - "  - Ingress Class: {{ instance.ingress_class }}"
+      - "  - Service Type: {{ instance.service_type | default('LoadBalancer') }}"
+      - "  - ExternalTrafficPolicy: {{ instance.external_traffic_policy | default('Cluster') }}"
+
+- name: "Deploy {{ instance.name }} via HelmChart CRD"
+  ansible.builtin.uri:
+    url: "{{ rancher_url }}/v1/helm.cattle.io.helmcharts/{{ haproxy_namespace }}"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ rancher_token }}"
+      Content-Type: "application/json"
+    body_format: json
+    body:
+      type: "helm.cattle.io.helmchart"
+      metadata:
+        name: "{{ instance.name }}"
+        namespace: "{{ haproxy_namespace }}"
+      spec:
+        repo: "{{ haproxy_repo_url }}"
+        chart: "{{ haproxy_chart_name }}"
+        targetNamespace: "{{ haproxy_namespace }}"
+        valuesContent: "{{ instance_values_yaml }}"
+    validate_certs: "{{ rancher_verify_ssl }}"
+    status_code: [201, 409]
+  register: helmchart_deployment
+  failed_when: false
+
+- name: "Display deployment status for {{ instance.name }}"
+  ansible.builtin.debug:
+    msg: "✓ HAProxy Ingress HelmChart '{{ instance.name }}' created (status: {{ helmchart_deployment.status }})"
+
+- name: "Wait for {{ instance.name }} HelmChart to be deployed"
+  ansible.builtin.uri:
+    url: "{{ rancher_url }}/v1/helm.cattle.io.helmcharts/{{ haproxy_namespace }}/{{ instance.name }}"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ rancher_token }}"
+    validate_certs: "{{ rancher_verify_ssl }}"
+  register: helmchart_status
+  until: >
+    helmchart_status.json.status is defined and
+    helmchart_status.json.status.jobName is defined
+  retries: 60
+  delay: 5
+  failed_when: false
+  when: helmchart_deployment.status == 201
+
+- name: "Display final status for {{ instance.name }}"
+  ansible.builtin.debug:
+    msg: "✓ {{ instance.name }} deployment initiated (Job: {{ helmchart_status.json.status.jobName | default('pending') }})"
+  when: helmchart_status.json is defined and helmchart_status.json.status is defined

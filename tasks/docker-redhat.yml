@@ -1,0 +1,40 @@
+---
+# ---------------------------------------------------------
+# DOCKER FOR REDHAT / ROCKY / ALMA / CENTOS
+# ---------------------------------------------------------
+- name: Install system dependencies (RedHat)
+  ansible.builtin.dnf:
+    name:
+      - dnf-plugins-core
+      - python3-dnf
+    state: present
+
+# RHEL/CentOS 8+ often ships with podman/buildah which conflicts with Docker
+- name: Remove conflicting packages (Podman/Buildah)
+  ansible.builtin.dnf:
+    name:
+      - podman
+      - buildah
+    state: absent
+
+- name: Add Docker CE repository
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/centos/docker-ce.repo
+    dest: /etc/yum.repos.d/docker-ce.repo
+    mode: '0644'
+
+- name: Install Docker CE (RedHat)
+  ansible.builtin.dnf:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    state: present
+
+- name: Start and Enable Docker service
+  ansible.builtin.systemd:
+    name: docker
+    state: started
+    enabled: true

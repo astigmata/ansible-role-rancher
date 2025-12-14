@@ -4,4 +4,4 @@
   become: true
 
   roles:
-    - role: rancher
+    - role: ansible-role-rancher

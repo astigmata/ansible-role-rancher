@@ -1,65 +1,17 @@
 ---
 # ---------------------------------------------------------
-# SYSTEM & DOCKER ENGINE
+# DOCKER INSTALLATION DISPATCHER
 # ---------------------------------------------------------
-- name: Install system dependencies and NTP
-  ansible.builtin.package:
-    name:
-      - apt-transport-https
-      - ca-certificates
-      - curl
-      - gnupg
-      - lsb-release
-      - python3-docker  # Preferred over pip for Docker Python library (avoids PEP 668 issues)
-      - ntp
-    state: present
-    update_cache: true
 
-- name: Enable NTP service
-  ansible.builtin.service:
-    name: ntp
-    state: started
-    enabled: true
+- name: Install Docker for Debian/Ubuntu family
+  ansible.builtin.include_tasks: docker-debian.yml
+  when: ansible_os_family == 'Debian'
 
-- name: Create APT keyrings directory
-  ansible.builtin.file:
-    path: /etc/apt/keyrings
-    state: directory
-    mode: '0755'
+- name: Install Docker for RedHat/Rocky/Alma family
+  ansible.builtin.include_tasks: docker-redhat.yml
+  when: ansible_os_family == 'RedHat'
 
-- name: Download Docker GPG key
-  ansible.builtin.get_url:
-    url: https://download.docker.com/linux/ubuntu/gpg
-    dest: /etc/apt/keyrings/docker.asc
-    mode: '0644'
-    force: false
-
-- name: Add official Docker repository
-  ansible.builtin.apt_repository:
-    repo: >-
-      deb [arch={{ docker_arch }} signed-by=/etc/apt/keyrings/docker.asc]
-      https://download.docker.com/linux/ubuntu
-      {{ ansible_distribution_release }} stable
-    state: present
-    filename: docker
-
-- name: Install Docker CE
-  ansible.builtin.package:
-    name:
-      - docker-ce
-      - docker-ce-cli
-      - containerd.io
-      - docker-buildx-plugin
-      - docker-compose-plugin
-    state: present
-    update_cache: true
-
-- name: Start Docker service
-  ansible.builtin.service:
-    name: docker
-    state: started
-    enabled: true
-
+# Common configuration tasks (User group)
 - name: Determine user for Docker group
   ansible.builtin.set_fact:
     docker_group_user: >-
@@ -83,6 +35,4 @@
     msg:
       - "User '{{ docker_group_user }}' has been added to the docker group"
       - "Note: You need to log out and back in for this to take effect"
-      - "Or run: newgrp docker"
-      - "Current SSH session will NOT have docker group access immediately"
   when: docker_group_user != 'root'

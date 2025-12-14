@@ -1,0 +1,42 @@
+# Velero Configuration
+# Installed: 2025-12-15T00:03:00+01:00
+
+## MinIO Storage Backend
+Service: minio.velero.svc:9000
+Bucket: velero
+Access Key: velero
+Secret Key: velero123456
+
+## Velero CLI Commands
+
+# Check status
+kubectl get pods -n velero
+velero version
+
+# Create a backup
+velero backup create my-backup --include-namespaces default
+velero backup create all-namespaces --exclude-namespaces kube-system,kube-public
+
+# List backups
+velero backup get
+velero backup describe my-backup
+
+# Restore from backup
+velero restore create --from-backup my-backup
+velero restore get
+
+# Schedule automatic backups
+velero schedule create daily-backup --schedule="0 2 * * *" --include-namespaces default
+velero schedule get
+
+# Backup with PV snapshots (using restic/node-agent)
+velero backup create pv-backup --default-volumes-to-fs-backup
+
+## MinIO Console Access
+kubectl port-forward -n velero svc/minio-console 9001:9001
+# Then open: http://localhost:9001
+# Login: velero / velero123456
+
+## Troubleshooting
+kubectl logs -n velero deployment/velero -f
+kubectl get backupstoragelocation -n velero

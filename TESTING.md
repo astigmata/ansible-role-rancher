@@ -1,22 +1,39 @@
 # Rancher Role Testing Guide
 
-## Two Test Scenarios
+## Three Test Scenarios
 
-This role provides two testing approaches:
+This role provides three testing approaches:
 
 ### 🚀 FULL Tests with Vagrant (RECOMMENDED)
-Uses VirtualBox/Vagrant to create a real VM and tests **EVERYTHING** :
+Uses VirtualBox/Vagrant to create real VMs and tests **EVERYTHING** :
 - ✅ Hardware prerequisites validation
 - ✅ Docker installation
 - ✅ System configuration
 - ✅ Rancher volume creation
 - ✅ **Complete Rancher container deployment**
 - ✅ **Rancher API verification**
+- ✅ **K3s API Aggregation verification**
 - ✅ **Web interface access test**
 
-**Duration:** ~10-15 minutes | **Prerequisites:** VirtualBox + Vagrant installed
+**Tested distributions:**
+- Ubuntu 22.04 LTS (Debian family)
+- Rocky Linux 9 (RedHat family)
 
-> **Note:** Uses Vagrant directly (not Molecule) to avoid compatibility issues
+**Duration:** ~20-30 minutes (both VMs in parallel) | **Prerequisites:** VirtualBox + Vagrant installed
+
+> **Note:** Tests BOTH distributions in parallel with full Rancher deployment
+
+### 🔄 `multi-distro` - Multi-Distribution Tests (Docker)
+Tests role compatibility across multiple Linux distributions:
+- ✅ Ubuntu 22.04 (Debian family)
+- ✅ Rocky Linux 9 (RedHat family)
+- ✅ Debian 12 (Debian family)
+- ✅ Infrastructure validation on all platforms
+- ⏭️ Rancher container deployment (skipped - Docker-in-Docker limitation)
+
+**Duration:** ~8-12 minutes | **Prerequisites:** Docker installed
+
+> **Note:** Validates that the role works correctly across different OS families (Debian vs RedHat)
 
 ### ⚡ `default` - QUICK Tests (infrastructure only)
 Uses Docker for quick tests (CI/CD):
@@ -69,6 +86,16 @@ make test-full
 
 # OR directly with Vagrant
 vagrant up
+```
+
+### MULTI-DISTRO Tests (validate across Linux distributions)
+
+```bash
+# Test on Ubuntu, Rocky Linux, and Debian
+molecule test -s multi-distro
+
+# OR keep instances after test for debugging
+molecule test -s multi-distro --destroy=never
 ```
 
 ### QUICK Tests with Docker (infrastructure only)
@@ -261,17 +288,33 @@ make destroy
 
 ### `vagrant` Scenario (RECOMMENDED for full validation)
 
-This scenario tests **EVERYTHING**:
-1. Creation of Ubuntu 22.04 VM (VirtualBox)
-2. Docker installation
+This scenario tests **EVERYTHING** on BOTH distributions:
+1. Creation of 2 VMs in parallel (VirtualBox):
+   - Ubuntu 22.04 LTS (Debian family)
+   - Rocky Linux 9 (RedHat family)
+2. Docker installation on each distribution
 3. **Complete Rancher deployment with K3s**
 4. **Rancher API verification**
-5. **Web interface access test**
-6. Idempotence test
+5. **K3s API Aggregation verification**
+6. **Web interface access test**
+7. Idempotence test
 
 **Prerequisites:** VirtualBox + Vagrant
-**Duration:** 10-15 minutes
+**Duration:** 20-30 minutes (both VMs tested in parallel)
 **Usage:** Complete validation before production deployment
+
+### `multi-distro` Scenario (cross-platform validation)
+
+This scenario validates role compatibility across different Linux distributions:
+1. Creation of 3 Docker containers (Ubuntu 22.04, Rocky Linux 8, Debian 12)
+2. Docker installation on each distribution
+3. Data volume creation
+4. Verification that the role works on both Debian and RedHat families
+5. ⏭️ Skip Rancher deployment (DinD limitation)
+
+**Prerequisites:** Docker
+**Duration:** 8-12 minutes
+**Usage:** Validate role compatibility before supporting new distributions
 
 ### `default` Scenario (quick for CI/CD)
 
@@ -367,12 +410,12 @@ To integrate into a CI/CD pipeline:
 
 ## Test Metrics
 
-### Vagrant Scenario (full)
-- VM creation: ~1-2min
-- Docker installation: ~2min
-- Rancher deployment: ~5-7min (K3s init)
-- Verification tests: ~1min
-- **Total: ~10-15 minutes**
+### Vagrant Scenario (full - 2 VMs in parallel)
+- VM creation: ~2-3min (Ubuntu + Rocky)
+- Docker installation: ~2min per VM
+- Rancher deployment: ~5-7min per VM (K3s init)
+- Verification tests: ~1min per VM
+- **Total: ~20-30 minutes** (both VMs tested in parallel)
 
 ### Docker Scenario (quick)
 - Container creation: ~30s

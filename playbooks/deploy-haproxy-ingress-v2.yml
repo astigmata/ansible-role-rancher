@@ -1,0 +1,240 @@
+---
+# =============================================================================
+# Deploy HAProxy Ingress Controller via Rancher API (v2.9+)
+# =============================================================================
+# This playbook deploys HAProxy Ingress Controller using Rancher's modern
+# catalog.cattle.io and helm.cattle.io APIs (Rancher 2.6+)
+#
+# Requirements:
+#   - Rancher 2.6+ server accessible and running
+#   - Admin credentials for Rancher API
+#
+# Usage:
+#   ansible-playbook playbooks/deploy-haproxy-ingress-v2.yml \
+#     -e rancher_url=https://localhost:8443 \
+#     -e rancher_admin_password=admin123456789
+# =============================================================================
+
+- name: Deploy HAProxy Ingress Controller via Rancher API v2
+  hosts: localhost
+  gather_facts: false
+
+  vars:
+    # Rancher API Configuration
+    rancher_url: "https://192.168.56.10:8443"
+    rancher_admin_user: "admin"
+    rancher_admin_password: "admin123456789"
+    rancher_verify_ssl: false
+
+    # HAProxy Ingress Configuration
+    haproxy_namespace: "haproxy-controller"
+    haproxy_release_name: "haproxy-ingress"
+
+    # Helm Repository Configuration
+    haproxy_repo_name: "haproxy"
+    haproxy_repo_url: "https://haproxytech.github.io/helm-charts"
+    haproxy_chart_name: "kubernetes-ingress"
+
+    # HAProxy Values
+    haproxy_controller_kind: "DaemonSet"
+    haproxy_external_traffic_policy: "Local"
+    haproxy_ipv6_enabled: false
+
+  tasks:
+    # =========================================================================
+    # STEP 1: Authenticate with Rancher API
+    # =========================================================================
+    - name: Login to Rancher API
+      ansible.builtin.uri:
+        url: "{{ rancher_url }}/v3-public/localProviders/local?action=login"
+        method: POST
+        body_format: json
+        body:
+          username: "{{ rancher_admin_user }}"
+          password: "{{ rancher_admin_password }}"
+        validate_certs: "{{ rancher_verify_ssl }}"
+        status_code: 201
+      register: rancher_login
+
+    - name: Extract Rancher API token
+      ansible.builtin.set_fact:
+        rancher_token: "{{ rancher_login.json.token }}"
+
+    - name: Display authentication status
+      ansible.builtin.debug:
+        msg: "✓ Successfully authenticated to Rancher API"
+
+    # =========================================================================
+    # STEP 2: Add HAProxy Helm Repository (ClusterRepo)
+    # =========================================================================
+    - name: Check if HAProxy ClusterRepo already exists
+      ansible.builtin.uri:
+        url: "{{ rancher_url }}/v1/catalog.cattle.io.clusterrepos/{{ haproxy_repo_name }}"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ rancher_token }}"
+        validate_certs: "{{ rancher_verify_ssl }}"
+        status_code: [200, 404]
+      register: repo_check
+      failed_when: false
+
+    - name: Create HAProxy ClusterRepo
+      ansible.builtin.uri:
+        url: "{{ rancher_url }}/v1/catalog.cattle.io.clusterrepos"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ rancher_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          type: "catalog.cattle.io.clusterrepo"
+          metadata:
+            name: "{{ haproxy_repo_name }}"
+          spec:
+            url: "{{ haproxy_repo_url }}"
+        validate_certs: "{{ rancher_verify_ssl }}"
+        status_code: [201]
+      when: repo_check.status == 404
+      register: repo_create
+
+    - name: Wait for ClusterRepo to be ready
+      ansible.builtin.uri:
+        url: "{{ rancher_url }}/v1/catalog.cattle.io.clusterrepos/{{ haproxy_repo_name }}"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ rancher_token }}"
+        validate_certs: "{{ rancher_verify_ssl }}"
+      register: repo_status
+      until: >
+        repo_status.json.status is defined and
+        repo_status.json.status.conditions is defined and
+        (repo_status.json.status.conditions | selectattr('type', 'equalto', 'Downloaded') | map(attribute='status') | list | first | default('False')) == 'True'
+      retries: 30
+      delay: 5
+      when: repo_check.status == 404
+
+    - name: Display repository status
+      ansible.builtin.debug:
+        msg: "✓ HAProxy Helm repository ready"
+
+    # =========================================================================
+    # STEP 3: Create Namespace
+    # =========================================================================
+    - name: Create namespace for HAProxy Ingress
+      ansible.builtin.uri:
+        url: "{{ rancher_url }}/v1/namespaces"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ rancher_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          type: "namespace"
+          metadata:
+            name: "{{ haproxy_namespace }}"
+        validate_certs: "{{ rancher_verify_ssl }}"
+        status_code: [201, 409]
+      register: namespace_result
+      failed_when: false
+
+    - name: Display namespace status
+      ansible.builtin.debug:
+        msg: "✓ Namespace '{{ haproxy_namespace }}' ready"
+
+    # =========================================================================
+    # STEP 4: Deploy HAProxy Ingress via HelmChart CRD
+    # =========================================================================
+    - name: Prepare Helm values for HAProxy Ingress
+      ansible.builtin.set_fact:
+        haproxy_values_yaml: |
+          controller:
+            kind: {{ haproxy_controller_kind }}
+            extraArgs:
+              - --disable-ipv6
+            service:
+              type: LoadBalancer
+              externalTrafficPolicy: {{ haproxy_external_traffic_policy }}
+            resources:
+              requests:
+                cpu: 100m
+                memory: 128Mi
+              limits:
+                cpu: 500m
+                memory: 512Mi
+            logging:
+              level: info
+          defaultBackend:
+            enabled: true
+            replicaCount: 1
+
+    - name: Deploy HAProxy Ingress via HelmChart CRD
+      ansible.builtin.uri:
+        url: "{{ rancher_url }}/v1/helm.cattle.io.helmcharts/{{ haproxy_namespace }}"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ rancher_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          type: "helm.cattle.io.helmchart"
+          metadata:
+            name: "{{ haproxy_release_name }}"
+            namespace: "{{ haproxy_namespace }}"
+          spec:
+            repo: "{{ haproxy_repo_url }}"
+            chart: "{{ haproxy_chart_name }}"
+            targetNamespace: "{{ haproxy_namespace }}"
+            valuesContent: "{{ haproxy_values_yaml }}"
+        validate_certs: "{{ rancher_verify_ssl }}"
+        status_code: [201, 409]
+      register: helmchart_deployment
+      failed_when: false
+
+    - name: Display deployment status
+      ansible.builtin.debug:
+        msg: "✓ HAProxy Ingress HelmChart created"
+
+    # =========================================================================
+    # STEP 5: Wait for Deployment to Complete
+    # =========================================================================
+    - name: Wait for HelmChart to be deployed
+      ansible.builtin.uri:
+        url: "{{ rancher_url }}/v1/helm.cattle.io.helmcharts/{{ haproxy_namespace }}/{{ haproxy_release_name }}"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ rancher_token }}"
+        validate_certs: "{{ rancher_verify_ssl }}"
+      register: helmchart_status
+      until: >
+        helmchart_status.json.status is defined and
+        helmchart_status.json.status.conditions is defined and
+        (helmchart_status.json.status.conditions | selectattr('type', 'equalto', 'Ready') | map(attribute='status') | first | default('False')) == 'True'
+      retries: 60
+      delay: 10
+      failed_when: false
+
+    # =========================================================================
+    # STEP 6: Display Deployment Summary
+    # =========================================================================
+    - name: Display deployment summary
+      ansible.builtin.debug:
+        msg:
+          - "======================================================="
+          - "HAProxy Ingress Controller Deployment Summary"
+          - "======================================================="
+          - "Namespace: {{ haproxy_namespace }}"
+          - "Release Name: {{ haproxy_release_name }}"
+          - "Chart: {{ haproxy_chart_name }}"
+          - "Repository: {{ haproxy_repo_url }}"
+          - "---"
+          - "Configuration:"
+          - "  - Mode: {{ haproxy_controller_kind }}"
+          - "  - ExternalTrafficPolicy: {{ haproxy_external_traffic_policy }}"
+          - "  - IPv6: {{ 'Disabled' if not haproxy_ipv6_enabled else 'Enabled' }}"
+          - "---"
+          - "Status: {{ helmchart_status.json.status | default('deploying') }}"
+          - "======================================================="
+          - ""
+          - "Verify deployment with:"
+          - "  kubectl get all -n {{ haproxy_namespace }}"
+          - "======================================================="

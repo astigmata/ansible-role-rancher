@@ -3,7 +3,7 @@ galaxy_info:
   role_name: rancher
   namespace: astigmata
   author: astigmata
-  description: Deploy Rancher Server (Single Node) on Ubuntu with Docker
+  description: Deploy Rancher Server (Single Node) on Ubuntu/RHEL/Rocky with Docker
   license: MIT
   min_ansible_version: "2.9"
 
@@ -13,6 +13,10 @@ galaxy_info:
         - focal
         - jammy
         - noble
+    - name: EL  # Enterprise Linux
+      versions:
+        - "8"
+        - "9"
 
   galaxy_tags:
     - rancher
@@ -20,6 +24,8 @@ galaxy_info:
     - kubernetes
     - container
     - k3s
+    - rhel
+    - rocky
 
 dependencies: []
 
@@ -27,3 +33,4 @@ collections:
   - community.general
   - community.docker
   - community.crypto
+  - ansible.posix  # Added for firewalld support

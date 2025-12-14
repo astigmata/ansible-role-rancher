@@ -20,8 +20,9 @@
     - name: Assert Docker service is running
       ansible.builtin.assert:
         that:
-          - ansible_facts.services['docker.service'].state == 'running'
-        fail_msg: "Docker service is not running"
+          # Utilisation de .get() pour éviter le crash
+          - ansible_facts.services.get('docker.service', {}).get('state') == 'running'
+        fail_msg: "Docker service is not running or not found"
         success_msg: "Docker service is running"
 
     - name: Check if Rancher data volume exists
