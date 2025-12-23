@@ -2,6 +2,11 @@
 # ---------------------------------------------------------
 # SELF-SIGNED CERTIFICATE GENERATION (using community.crypto)
 # ---------------------------------------------------------
+- name: Install Python cryptography library (required for community.crypto)
+  ansible.builtin.package:
+    name: python3-cryptography
+    state: present
+
 - name: Generate private key for self-signed certificate
   community.crypto.openssl_privatekey:
     path: "{{ rancher_ssl_cert_dir }}/key.pem"

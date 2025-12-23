@@ -1,8 +1,0 @@
----
-# Test variables - SINGLE SOURCE OF TRUTH
-# The Vagrantfile reads these values automatically
-# No need to maintain configuration in two places!
-
-rancher_bootstrap_password: "admin123456789"
-rancher_public_ip: "192.168.56.15"
-rancher_configure_firewall: false

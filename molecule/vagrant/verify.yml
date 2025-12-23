@@ -20,8 +20,9 @@
     - name: Assert Docker service is running
       ansible.builtin.assert:
         that:
-          - ansible_facts.services['docker.service'].state == 'running'
-        fail_msg: "Docker service is not running"
+          # Utilisation de .get() pour éviter le crash
+          - ansible_facts.services.get('docker.service', {}).get('state') == 'running'
+        fail_msg: "Docker service is not running or not found"
         success_msg: "Docker service is running"
 
     - name: Check if Rancher data volume exists
@@ -79,13 +80,52 @@
         status_code: [200, 301, 302]
       register: rancher_https
 
+    # ENHANCED: Certificate validation tests
+    - name: Check if SSL certificate files exist
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: ssl_files
+      loop:
+        - /opt/rancher/ssl/cert.pem
+        - /opt/rancher/ssl/key.pem
+
+    - name: Assert SSL certificate files exist
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+        fail_msg: "SSL certificate file {{ item.item }} does not exist"
+        success_msg: "SSL certificate file {{ item.item }} exists"
+      loop: "{{ ssl_files.results }}"
+
+    - name: Verify certificate validity and SANs (if openssl available)
+      ansible.builtin.shell: |
+        set -o pipefail
+        openssl x509 -in /opt/rancher/ssl/cert.pem -noout -text | grep -A1 "Subject Alternative Name"
+      register: cert_sans
+      changed_when: false
+      failed_when: false
+
+    - name: Display certificate SANs
+      ansible.builtin.debug:
+        msg: "Certificate SANs: {{ cert_sans.stdout }}"
+      when: cert_sans.rc == 0
+
+    - name: Verify certificate is valid (not expired)
+      ansible.builtin.shell: |
+        openssl x509 -in /opt/rancher/ssl/cert.pem -noout -checkend 0
+      register: cert_validity
+      changed_when: false
+      failed_when: cert_validity.rc != 0
+
     - name: Display success message
       ansible.builtin.debug:
         msg:
           - "======================================================="
-          - "✓ ALL TESTS PASSED!"
+          - "✓ ALL TESTS PASSED for {{ ansible_distribution }} {{ ansible_distribution_version }}"
           - "✓ Docker installed and running"
           - "✓ Rancher container deployed and running"
           - "✓ Rancher API responding"
           - "✓ Rancher web interface accessible"
+          - "✓ SSL certificates valid and properly configured"
+          - "✓ K3s API Aggregation ready and validated"
           - "======================================================="

@@ -5,18 +5,22 @@
 This role provides two testing approaches:
 
 ### 🚀 FULL Tests with Vagrant (RECOMMENDED)
-Uses VirtualBox/Vagrant to create a real VM and tests **EVERYTHING** :
+Uses VirtualBox/Vagrant to create real VMs and tests **EVERYTHING** :
 - ✅ Hardware prerequisites validation
 - ✅ Docker installation
 - ✅ System configuration
 - ✅ Rancher volume creation
 - ✅ **Complete Rancher container deployment**
 - ✅ **Rancher API verification**
+- ✅ **K3s API Aggregation verification**
 - ✅ **Web interface access test**
+
+**Tested distribution:**
+- Ubuntu 22.04 LTS
 
 **Duration:** ~10-15 minutes | **Prerequisites:** VirtualBox + Vagrant installed
 
-> **Note:** Uses Vagrant directly (not Molecule) to avoid compatibility issues
+> **Note:** Tests complete Rancher deployment on Ubuntu
 
 ### ⚡ `default` - QUICK Tests (infrastructure only)
 Uses Docker for quick tests (CI/CD):
@@ -52,8 +56,7 @@ sudo apt install vagrant
 Manual installation:
 ```bash
 pip install -r requirements-dev.txt
-pip install molecule-vagrant python-vagrant
-ansible-galaxy collection install -r molecule/default/requirements.yml
+ansible-galaxy collection install -r requirements.yml
 ```
 
 ## Running Tests
@@ -67,8 +70,10 @@ make test
 # OR explicitly
 make test-full
 
-# OR directly with Vagrant
-vagrant up
+# OR using Vagrant commands directly
+make up-ubuntu        # Create and provision
+make ssh-ubuntu       # SSH into VM
+make destroy-ubuntu   # Destroy VM
 ```
 
 ### QUICK Tests with Docker (infrastructure only)
@@ -85,30 +90,29 @@ molecule test -s default --destroy=never
 
 #### With Vagrant (full test)
 ```bash
-molecule create -s vagrant     # Create the VM
-molecule converge -s vagrant   # Apply the role
-molecule verify -s vagrant     # Run the tests
-molecule destroy -s vagrant    # Destroy the VM
+make up-ubuntu           # Create and provision the VM
+make ssh-ubuntu          # Connect to the VM
+make provision-ubuntu    # Re-provision if needed
+make destroy-ubuntu      # Destroy the VM
 ```
 
 #### With Docker (quick test)
 ```bash
-molecule create -s default     # Create the container
-molecule converge -s default   # Apply the role (skip Rancher)
-molecule verify -s default     # Run the tests
+make converge            # Create and provision the container
+make verify              # Run verification tests
 molecule destroy -s default    # Destroy the container
 ```
 
 ### Idempotence Tests
 
 ```bash
-# With Vagrant (recommended)
+# Test idempotence with Vagrant
 make idempotence
 
-# OR manually
-molecule create -s vagrant
-molecule converge -s vagrant
-molecule idempotence -s vagrant  # Verify that a 2nd execution changes nothing
+# This will:
+# 1. Provision the VM
+# 2. Run provision again
+# 3. Verify no changes were made
 ```
 
 ## Linting
@@ -127,20 +131,20 @@ ansible-lint .
 ### Connect to the Test VM (Vagrant)
 
 ```bash
-# Create and converge first
-molecule converge -s vagrant
+# Create and provision first
+make up-ubuntu
 
 # Connect to the VM
-molecule login -s vagrant
+make ssh-ubuntu
 
 # Inside the VM:
 docker ps
 docker logs rancher
 curl -k https://localhost:8443/ping
 
-# Access the web interface
-# The VM IP is displayed during create
-# Open in a browser: https://<VM_IP>:8443
+# Access the web interface from your browser
+# https://192.168.56.10:8443
+# Login: admin / TestPassword123!
 ```
 
 ### Connect to the Test Container (Docker)
@@ -161,21 +165,21 @@ docker volume ls
 
 #### With Vagrant
 ```bash
-# Keep the VM after failure
-molecule test -s vagrant --destroy=never
+# Create VM without destroying on failure
+make up-ubuntu
 
 # Connect to the VM
-molecule login -s vagrant
+make ssh-ubuntu
 
-# Examine Rancher logs
+# Inside the VM, examine logs:
 docker logs rancher
 journalctl -u docker -n 100
 
-# Re-converge after modifications
-molecule converge -s vagrant
+# Re-provision after modifications
+make provision-ubuntu
 
 # Destroy when done
-molecule destroy -s vagrant
+make destroy-ubuntu
 ```
 
 #### With Docker
@@ -196,13 +200,10 @@ molecule destroy -s default
 
 ## Test Structure
 
-### `vagrant` Scenario (full)
+### Vagrant Tests (full)
 ```
-molecule/vagrant/
-├── molecule.yml      # Vagrant config with VirtualBox
-├── converge.yml      # Deploy complete role
-├── prepare.yml       # VM preparation
-└── verify.yml        # Complete tests including Rancher
+Vagrantfile.ubuntu    # Vagrant configuration for Ubuntu 22.04
+test_playbook.yml     # Ansible playbook to deploy the role
 ```
 
 Tests performed:
@@ -213,7 +214,7 @@ Tests performed:
 - ✅ Rancher API responds to /ping
 - ✅ Web interface accessible
 
-### `default` Scenario (quick)
+### Molecule `default` Scenario (quick)
 ```
 molecule/default/
 ├── molecule.yml      # Docker config
@@ -241,17 +242,11 @@ make help
 # List all active instances
 make list
 
+# Check status
+make status
+
 # Clean completely (destroy everything)
 make clean
-
-# Create a Vagrant VM
-molecule create -s vagrant
-
-# Verify after convergence
-molecule verify -s vagrant
-
-# Destroy the Vagrant VM
-molecule destroy -s vagrant
 
 # Destroy all environments
 make destroy
@@ -259,23 +254,24 @@ make destroy
 
 ## Test Scenarios
 
-### `vagrant` Scenario (RECOMMENDED for full validation)
+### Vagrant (RECOMMENDED for full validation)
 
 This scenario tests **EVERYTHING**:
 1. Creation of Ubuntu 22.04 VM (VirtualBox)
 2. Docker installation
 3. **Complete Rancher deployment with K3s**
 4. **Rancher API verification**
-5. **Web interface access test**
-6. Idempotence test
+5. **K3s API Aggregation verification**
+6. **Web interface access test**
 
 **Prerequisites:** VirtualBox + Vagrant
 **Duration:** 10-15 minutes
+**Command:** `make test` or `make up-ubuntu`
 **Usage:** Complete validation before production deployment
 
-### `default` Scenario (quick for CI/CD)
+### Molecule Default (quick for CI/CD)
 
-This scenario tests infrastructure:
+This scenario tests infrastructure only:
 1. Creation of Ubuntu 22.04 Docker container
 2. Docker installation
 3. Data volume creation
@@ -283,23 +279,8 @@ This scenario tests infrastructure:
 
 **Prerequisites:** Docker
 **Duration:** 3-5 minutes
+**Command:** `make test-quick`
 **Usage:** CI/CD, quick validation of infrastructure changes
-
-### Complete Test Sequence
-
-```
-dependency     → Install Ansible collections
-cleanup        → Cleanup before creation
-destroy        → Destroy previous instance
-syntax         → Syntax check
-create         → Create VM/container
-prepare        → Prepare environment
-converge       → Apply the role
-idempotence    → Idempotence test
-verify         → Run tests
-cleanup        → Final cleanup
-destroy        → Destroy instance
-```
 
 ## Troubleshooting
 
@@ -367,8 +348,8 @@ To integrate into a CI/CD pipeline:
 
 ## Test Metrics
 
-### Vagrant Scenario (full)
-- VM creation: ~1-2min
+### Vagrant Scenario (full Ubuntu test)
+- VM creation: ~2-3min
 - Docker installation: ~2min
 - Rancher deployment: ~5-7min (K3s init)
 - Verification tests: ~1min

@@ -3,5 +3,11 @@
   hosts: all
   become: true
 
-  roles:
-    - role: rancher
+  tasks:
+    - name: Include role defaults
+      ansible.builtin.include_vars:
+        file: ../../defaults/main.yml
+
+    - name: Include role tasks
+      ansible.builtin.import_tasks:
+        file: ../../tasks/main.yml

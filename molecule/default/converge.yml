@@ -3,5 +3,18 @@
   hosts: all
   become: true
 
-  roles:
-    - role: rancher
+  pre_tasks:
+    - name: Include role defaults
+      ansible.builtin.include_vars:
+        file: ../../defaults/main.yml
+
+    - name: Set test-specific variables
+      ansible.builtin.set_fact:
+        rancher_bootstrap_password: "TestPassword123!"
+        rancher_configure_firewall: false
+        rancher_skip_container_deploy: true
+
+  tasks:
+    - name: Include role tasks
+      ansible.builtin.import_tasks:
+        file: ../../tasks/main.yml

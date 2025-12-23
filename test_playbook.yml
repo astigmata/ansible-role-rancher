@@ -16,8 +16,8 @@
           - "Access Rancher from your browser:"
           - >-
             URL: https://{{ rancher_public_ip |
-            default(ansible_all_ipv4_addresses |
-            select('match', '^192\\.168\\.') | first) }}:8443
+            default((ansible_all_ipv4_addresses | default([]) |
+            select('match', '^192\\.168\\.') | list + ['localhost'])[0]) }}:8443
           - ""
           - "Login credentials:"
           - "  Username: admin"
