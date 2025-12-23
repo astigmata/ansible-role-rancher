@@ -1,10 +1,10 @@
 ---
 # Rancher configuration
-# Using "stable" tag for maximum compatibility while maintaining production reliability
-# The "stable" tag points to the latest stable release tested by Rancher
-# For version pinning: Check Docker Hub tags at https://hub.docker.com/r/rancher/rancher/tags
-# Example pinned versions: "v2.9.3" (LTS), "v2.10.2", "latest"
-rancher_version: "stable"  # Safe default - points to latest stable tested release
+# PRODUCTION BEST PRACTICE: Pin to a specific version in production for predictable deployments
+# Using a fixed version ensures that redeployments 6 months later use the same version
+# Check Docker Hub tags at https://hub.docker.com/r/rancher/rancher/tags
+# Example pinned versions: "v2.9.3", "v2.9-head", "v2.8.9"
+rancher_version: "v2.13.1"  # Default: stable (override with specific version in production)
 rancher_data_volume: "rancher_data"
 rancher_container_name: "rancher"
 rancher_port: 8443
@@ -21,12 +21,15 @@ rancher_min_vcpus: 2
 rancher_min_memory_mb: 3500
 
 # Initialization timeouts
+# TUNABLE: Adjust these values based on your hardware performance
+# For slower hardware (low CPU/RAM): increase retries even more
+# For fast hardware (8+ vCPU, 16GB+ RAM): can reduce slightly but test first
 # Note: No arbitrary pause - we rely on proper API polling with retries
-rancher_api_wait_retries: 90  # Increased from 60 to compensate for removed pause
-rancher_api_wait_delay: 10
-# Full initialization wait (for API Aggregation to be ready)
-rancher_full_init_retries: 60
-rancher_full_init_delay: 10
+rancher_api_wait_retries: 90      # Initial API availability (90 retries × 10s = 900s max)
+rancher_api_wait_delay: 10        # Delay between retries in seconds
+# Full initialization wait (for K3s API Aggregation to be ready)
+rancher_full_init_retries: 60     # K3s initialization can take longer (600s max)
+rancher_full_init_delay: 10       # Delay between health checks
 
 # UFW configuration
 rancher_configure_firewall: true

@@ -2,7 +2,7 @@
 dependency:
   name: galaxy
   options:
-    requirements-file: ../../molecule/default/requirements.yml
+    requirements-file: requirements.yml
 
 driver:
   name: vagrant
@@ -21,17 +21,6 @@ platforms:
         network_name: private_network
         type: dhcp
 
-  - name: rancher-rocky-9
-    box: bento/rockylinux-9
-    memory: 4096
-    cpus: 2
-    provider_options:
-      linked_clone: true
-    interfaces:
-      - auto_config: true
-        network_name: private_network
-        type: dhcp
-
 provisioner:
   name: ansible
   config_options:
@@ -40,9 +29,6 @@ provisioner:
   inventory:
     host_vars:
       rancher-ubuntu-2204:
-        rancher_bootstrap_password: "TestPassword123!"
-        rancher_configure_firewall: false
-      rancher-rocky-9:
         rancher_bootstrap_password: "TestPassword123!"
         rancher_configure_firewall: false
   playbooks:

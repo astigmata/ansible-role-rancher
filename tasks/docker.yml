@@ -1,15 +1,16 @@
 ---
 # ---------------------------------------------------------
-# DOCKER INSTALLATION DISPATCHER
+# DOCKER INSTALLATION (Ubuntu/Debian only)
 # ---------------------------------------------------------
+
+- name: Verify OS family is Debian/Ubuntu
+  ansible.builtin.assert:
+    that:
+      - ansible_os_family == 'Debian'
+    fail_msg: "This role only supports Ubuntu/Debian distributions"
 
 - name: Install Docker for Debian/Ubuntu family
   ansible.builtin.include_tasks: docker-debian.yml
-  when: ansible_os_family == 'Debian'
-
-- name: Install Docker for RedHat/Rocky/Alma family
-  ansible.builtin.include_tasks: docker-redhat.yml
-  when: ansible_os_family == 'RedHat'
 
 # Common configuration tasks (User group)
 - name: Determine user for Docker group

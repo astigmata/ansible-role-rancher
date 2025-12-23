@@ -7,6 +7,13 @@
     name: "{{ rancher_data_volume }}"
     state: present
 
+- name: Copy fixed Rancher entrypoint script
+  ansible.builtin.copy:
+    src: rancher-entrypoint-fixed.sh
+    dest: /tmp/rancher-entrypoint-fixed.sh
+    mode: '0755'
+  when: not (rancher_skip_container_deploy | default(false) | bool)
+
 - name: Start Rancher container
   community.docker.docker_container:
     name: "{{ rancher_container_name }}"
@@ -14,6 +21,7 @@
     state: started
     restart_policy: unless-stopped
     privileged: true
+    entrypoint: /tmp/rancher-entrypoint-fixed.sh
     command: "{{ (rancher_ssl_mode == 'selfsigned') | ternary(['--no-cacerts'], omit) }}"
     ports:
       - "{{ rancher_http_port }}:80"
@@ -22,6 +30,7 @@
       - "{{ rancher_data_volume }}:/var/lib/rancher"
       - "{{ rancher_ssl_cert_dir }}/cert.pem:/etc/rancher/ssl/cert.pem:ro"
       - "{{ rancher_ssl_cert_dir }}/key.pem:/etc/rancher/ssl/key.pem:ro"
+      - "/tmp/rancher-entrypoint-fixed.sh:/tmp/rancher-entrypoint-fixed.sh:ro"
     env:
       CATTLE_BOOTSTRAP_PASSWORD: "{{ rancher_bootstrap_password }}"
     comparisons:
@@ -97,9 +106,12 @@
 
 - name: Verify K3s API Aggregation is ready
   ansible.builtin.shell: |
+    set -o pipefail
     docker exec {{ rancher_container_name }} kubectl get apiservices \
       -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.conditions[?(@.type=="Available")].status}{"\n"}{end}' 2>/dev/null | \
     awk '{if ($2 != "True") {print $1 " not available (status: " $2 ")"; exit 1}}'
+  args:
+    executable: /bin/bash
   register: apiservices_check
   until: apiservices_check.rc == 0
   retries: "{{ rancher_full_init_retries | default(60) }}"
@@ -124,6 +136,8 @@
       - "======================================================="
       - "Rancher Server is fully initialized and ready!"
       - "Access URL: https://{{ rancher_public_ip | default(ansible_default_ipv4.address) }}:{{ rancher_port }}"
+      - "{% if rancher_port != 443 %}INFO: Using non-standard HTTPS port {{ rancher_port }} (standard is 443){% endif %}"
+      - "{% if rancher_http_port != 80 %}INFO: Using non-standard HTTP port {{ rancher_http_port }} (standard is 80){% endif %}"
       - "Login credentials:"
       - "  Username: admin"
       - "  Password: {{ rancher_bootstrap_password }}"

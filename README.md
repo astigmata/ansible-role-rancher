@@ -1,16 +1,22 @@
 # Ansible Role: Rancher
 
-This Ansible role deploys Rancher Server in single node mode on Ubuntu with Docker.
+This Ansible role deploys Rancher Server in single node mode with Docker.
 
 ## Prerequisites
 
-- Ubuntu 20.04, 22.04 or 24.04
+**Supported Operating Systems:**
+- Ubuntu 20.04, 22.04, 24.04
+
+**Hardware Requirements:**
 - At least 2 vCPUs
-- At least 4 GB of RAM
+- At least 4 GB of RAM (3.5 GB minimum)
+
+**Software Requirements:**
 - Ansible 2.9+
 - Required collections:
   - `community.general`
   - `community.docker`
+  - `community.crypto`
 
 ## Installing dependencies
 
@@ -30,17 +36,19 @@ ansible-galaxy collection install -r requirements.yml
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `rancher_version` | `stable` | Rancher version to deploy (see version management below) |
+| `rancher_version` | `stable` | Rancher version to deploy (pin to specific version in production) |
 | `rancher_data_volume` | `rancher_data` | Docker volume name for data |
 | `rancher_container_name` | `rancher` | Rancher container name |
 | `rancher_port` | `8443` | HTTPS port for Rancher |
 | `rancher_http_port` | `8080` | HTTP port for Rancher |
 | `rancher_min_vcpus` | `2` | Minimum required vCPUs |
 | `rancher_min_memory_mb` | `3500` | Minimum required RAM (MB) |
-| `rancher_init_pause_seconds` | `30` | Pause after container startup |
-| `rancher_api_wait_retries` | `60` | Number of API retry attempts |
-| `rancher_api_wait_delay` | `10` | Delay between attempts (seconds) |
-| `rancher_configure_firewall` | `true` | Configure UFW automatically |
+| `rancher_api_wait_retries` | `10` | API availability retries (tunable for slower hardware) |
+| `rancher_api_wait_delay` | `10` | Delay between retries (seconds) |
+| `rancher_port_wait_timeout` | `300` | Max time to wait for port (seconds) |
+| `rancher_full_init_retries` | `60` | K3s initialization retries |
+| `rancher_full_init_delay` | `10` | K3s initialization delay (seconds) |
+| `rancher_configure_firewall` | `true` | Configure UFW firewall automatically |
 
 ### Required variables
 
@@ -197,6 +205,90 @@ rancher_version: "latest"
 - Easier rollback if needed
 
 Check available versions at: https://github.com/rancher/rancher/releases
+
+### 🔄 Upgrading Rancher
+
+**IMPORTANT:** Rancher upgrades should be planned carefully. Always:
+1. **Read the release notes** for breaking changes
+2. **Backup your data volume** before upgrading
+3. **Test in a non-production environment first**
+
+#### Upgrade Process
+
+**Step 1: Backup the current installation**
+
+```bash
+# Stop Rancher container
+docker stop rancher
+
+# Backup the data volume
+docker run --rm -v rancher_data:/data -v $(pwd):/backup \
+  ubuntu tar czf /backup/rancher-backup-$(date +%Y%m%d).tar.gz /data
+
+# Restart Rancher (if needed)
+docker start rancher
+```
+
+**Step 2: Update the version variable**
+
+```yaml
+# In your playbook or inventory
+rancher_version: "v2.9.3"  # Your target version
+```
+
+**Step 3: Run the role to upgrade**
+
+```bash
+ansible-playbook deploy_rancher.yml
+```
+
+The role will:
+- Pull the new Rancher image
+- Stop the current container
+- Start a new container with the updated version
+- Rancher will automatically migrate the database on first start
+
+**Step 4: Verify the upgrade**
+
+```bash
+# Check Rancher version
+docker exec rancher rancher --version
+
+# Check logs for migration progress
+docker logs -f rancher
+```
+
+#### Upgrade Path Considerations
+
+- **Minor upgrades** (e.g., v2.9.1 → v2.9.3): Generally safe, low risk
+- **Major upgrades** (e.g., v2.8.x → v2.9.x): Review [upgrade guides](https://ranchermanager.docs.rancher.com/getting-started/installation-and-upgrade/install-upgrade-on-a-kubernetes-cluster/upgrades)
+- **Multi-version jumps**: May require intermediate upgrades (e.g., v2.7 → v2.8 → v2.9)
+
+#### Rollback Procedure
+
+If something goes wrong:
+
+```bash
+# Stop the new version
+docker stop rancher
+docker rm rancher
+
+# Restore from backup
+docker run --rm -v rancher_data:/data -v $(pwd):/backup \
+  ubuntu tar xzf /backup/rancher-backup-YYYYMMDD.tar.gz -C /
+
+# Revert to previous version in your playbook
+rancher_version: "v2.9.1"  # Previous working version
+
+# Redeploy
+ansible-playbook deploy_rancher.yml
+```
+
+#### Upgrade Resources
+
+- **Official upgrade docs**: https://ranchermanager.docs.rancher.com/getting-started/installation-and-upgrade
+- **Known issues**: https://github.com/rancher/rancher/releases
+- **Support matrix**: https://www.suse.com/suse-rancher/support-matrix/all-supported-versions/
 
 ## Features
 

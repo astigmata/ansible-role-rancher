@@ -1,12 +1,7 @@
 ---
 # ---------------------------------------------------------
-# FIREWALL CONFIGURATION DISPATCHER
+# FIREWALL CONFIGURATION (UFW for Ubuntu/Debian only)
 # ---------------------------------------------------------
 
 - name: Configure UFW (Debian/Ubuntu)
   ansible.builtin.include_tasks: firewall-debian.yml
-  when: ansible_os_family == 'Debian'
-
-- name: Configure Firewalld (RedHat/Rocky/Suse)
-  ansible.builtin.include_tasks: firewall-redhat.yml
-  when: ansible_os_family in ['RedHat', 'Suse']

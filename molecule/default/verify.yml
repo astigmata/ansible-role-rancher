@@ -79,6 +79,30 @@
         msg: "Rancher API status: {{ rancher_api.status | default('Not reachable yet') }}"
       when: not (rancher_skip_container_deploy | default(false) | bool)
 
+    # ENHANCED: Certificate validation tests
+    - name: Check if SSL certificate files exist
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: ssl_files
+      loop:
+        - /opt/rancher/ssl/cert.pem
+        - /opt/rancher/ssl/key.pem
+
+    - name: Assert SSL certificate files exist
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+        fail_msg: "SSL certificate file {{ item.item }} does not exist"
+        success_msg: "SSL certificate file {{ item.item }} exists"
+      loop: "{{ ssl_files.results }}"
+
+    - name: Verify certificate is valid (not expired)
+      ansible.builtin.shell: |
+        openssl x509 -in /opt/rancher/ssl/cert.pem -noout -checkend 0
+      register: cert_validity
+      changed_when: false
+      failed_when: cert_validity.rc != 0
+
     - name: Test mode summary
       ansible.builtin.debug:
         msg:
