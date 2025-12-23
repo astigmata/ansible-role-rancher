@@ -89,21 +89,37 @@
     group: root
   when: rancher_ssl_chain_path is not defined or rancher_ssl_chain_path | length == 0
 
+- name: Get certificate info
+  community.crypto.x509_certificate_info:
+    path: "{{ rancher_ssl_cert_dir }}/cert.pem"
+  register: cert_info
+
+- name: Get private key info
+  community.crypto.openssl_privatekey_info:
+    path: "{{ rancher_ssl_cert_dir }}/key.pem"
+  register: key_info
+
 - name: Verify certificate matches private key
-  ansible.builtin.shell: |
-    set -o pipefail
-    CERT_MD5=$(openssl x509 -noout -modulus -in {{ rancher_ssl_cert_dir }}/cert.pem | openssl md5)
-    KEY_MD5=$(openssl rsa -noout -modulus -in {{ rancher_ssl_cert_dir }}/key.pem | openssl md5)
-    if [ "$CERT_MD5" != "$KEY_MD5" ]; then
-      echo "Certificate and key do not match!"
-      exit 1
-    fi
-  args:
-    executable: /bin/bash
-  changed_when: false
+  ansible.builtin.assert:
+    that:
+      - cert_info.public_key_fingerprints.sha256 == key_info.public_key_fingerprints.sha256
+    fail_msg: "Certificate and private key do not match!"
+    success_msg: "Certificate and private key are correctly paired"
 
 - name: Display provided certificate information
   ansible.builtin.debug:
     msg:
+      - "======================================================="
       - "Using provided SSL certificate"
       - "Make sure your domain points to this server's IP"
+      - "======================================================="
+      - "Certificate Details:"
+      - "  Subject: {{ cert_info.subject | dict2items | map(attribute='value') | join(', ') }}"
+      - "  Issuer: {{ cert_info.issuer | dict2items | map(attribute='value') | join(', ') }}"
+      - "  Valid from: {{ cert_info.not_before }}"
+      - "  Valid until: {{ cert_info.not_after }}"
+      - "  Serial: {{ cert_info.serial_number }}"
+      - "  Signature algorithm: {{ cert_info.signature_algorithm }}"
+      - "  Public key: {{ key_info.type }} {{ key_info.public_data.size }} bits"
+      - "  Subject Alternative Names: {{ cert_info.subject_alt_name | default([]) | join(', ') }}"
+      - "======================================================="

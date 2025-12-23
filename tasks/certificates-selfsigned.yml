@@ -51,31 +51,37 @@
     group: root
     state: present
 
-- name: Create combined certificate file (cert + key)
-  ansible.builtin.assemble:
-    src: "{{ rancher_ssl_cert_dir }}"
-    dest: "{{ rancher_ssl_cert_dir }}/tls.pem"
-    regexp: "(cert|key)\\.pem$"
-    mode: '0600'
-    owner: root
-    group: root
-  when: false  # Disabled: using individual files instead
+- name: Verify generated certificate
+  community.crypto.x509_certificate_info:
+    path: "{{ rancher_ssl_cert_dir }}/cert.pem"
+  register: selfsigned_cert_info
 
-- name: Combine certificate and key (alternative method)
-  ansible.builtin.copy:
-    content: |
-      {{ lookup('file', rancher_ssl_cert_dir + '/cert.pem') }}
-      {{ lookup('file', rancher_ssl_cert_dir + '/key.pem') }}
-    dest: "{{ rancher_ssl_cert_dir }}/tls.pem"
-    mode: '0600'
-    owner: root
-    group: root
-  when: false  # Disabled: only needed if Rancher requires combined file
+- name: Verify generated private key
+  community.crypto.openssl_privatekey_info:
+    path: "{{ rancher_ssl_cert_dir }}/key.pem"
+  register: selfsigned_key_info
 
-- name: Display self-signed certificate warning
+- name: Ensure certificate matches generated key
+  ansible.builtin.assert:
+    that:
+      - selfsigned_cert_info.public_key_fingerprints.sha256 == selfsigned_key_info.public_key_fingerprints.sha256
+    fail_msg: "Generated certificate and key do not match!"
+    success_msg: "Self-signed certificate successfully generated and validated"
+
+- name: Display self-signed certificate information
   ansible.builtin.debug:
     msg:
+      - "======================================================="
       - "WARNING: Using self-signed certificate"
       - "Your browser will show a security warning"
       - "For production, use 'provided' or 'letsencrypt' mode"
-      - "Certificate CN: {{ rancher_ssl_selfsigned_common_name }}"
+      - "======================================================="
+      - "Certificate Details:"
+      - "  Subject: {{ selfsigned_cert_info.subject | dict2items | map(attribute='value') | join(', ') }}"
+      - "  Issuer: {{ selfsigned_cert_info.issuer | dict2items | map(attribute='value') | join(', ') }}"
+      - "  Valid from: {{ selfsigned_cert_info.not_before }}"
+      - "  Valid until: {{ selfsigned_cert_info.not_after }}"
+      - "  Serial: {{ selfsigned_cert_info.serial_number }}"
+      - "  Signature algorithm: {{ selfsigned_cert_info.signature_algorithm }}"
+      - "  Public key: {{ selfsigned_key_info.type }} {{ selfsigned_key_info.public_data.size }} bits"
+      - "======================================================="
