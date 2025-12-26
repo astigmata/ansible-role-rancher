@@ -57,48 +57,22 @@ This document identifies performance anti-patterns, inefficient operations, and 
 
 ---
 
-### 2. **Expensive Docker Exec in Retry Loop** (MEDIUM-HIGH IMPACT)
+### 2. **~~Expensive Docker Exec in Retry Loop~~** ✅ **NOT AN ISSUE - REVERTED**
 **Location:** `tasks/deploy.yml:107-121`
 
-**Issue:** Executing `kubectl get apiservices` inside the container repeatedly in a retry loop:
-```yaml
-- name: Verify K3s API Aggregation is ready
-  ansible.builtin.shell: |
-    set -o pipefail
-    docker exec {{ rancher_container_name }} kubectl get apiservices \
-      -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.conditions[?(@.type=="Available")].status}{"\n"}{end}' 2>/dev/null | \
-    awk '{if ($2 != "True") {print $1 " not available (status: " $2 ")"; exit 1}}'
-  retries: "{{ rancher_full_init_retries | default(60) }}"
-  delay: "{{ rancher_full_init_delay | default(10) }}"
-```
+**Initial Assessment:** Executing `kubectl get apiservices` inside the container repeatedly in a retry loop appeared inefficient.
 
-**Problems:**
-- `docker exec` spawns a new process for each retry (potentially 60 times)
-- JSONPath parsing on the entire apiservices list every time
-- AWK processing adds overhead
-- Complex shell pipeline that's hard to debug
+**After Testing:** The proposed simplification using `/readyz/aggregator` endpoint **does not work** - it fails continuously and never completes. The original implementation, while appearing complex, is the **correct and necessary approach** for verifying K3s API aggregation status.
 
-**Impact:**
-- Each iteration spawns multiple processes (docker exec, kubectl, awk)
-- Potentially runs 60 times = 60 process spawns
-- Inefficient resource usage on host
+**Status:** **REVERTED** - The original implementation has been restored.
 
-**Recommendation:**
-```yaml
-# Alternative: Use docker container logs or a simpler readiness check
-# Or reduce complexity by checking a single critical API service
-- name: Verify K3s API Aggregation is ready
-  ansible.builtin.command:
-    cmd: docker exec {{ rancher_container_name }} kubectl get --raw /readyz/aggregator
-  register: apiservices_check
-  until: apiservices_check.rc == 0
-  retries: "{{ rancher_full_init_retries | default(60) }}"
-  delay: "{{ rancher_full_init_delay | default(10) }}"
-  changed_when: false
-  failed_when: false
-```
+**Conclusion:** This is proper infrastructure validation, not a performance issue. The complexity is justified because:
+- It verifies ALL API services are available (not just one endpoint)
+- Provides detailed diagnostics when services aren't ready
+- K3s initialization requires this comprehensive check
+- The retry loop is intentional and necessary
 
-**Estimated Time Savings:** Reduces CPU overhead, no direct time savings but better resource usage
+**No optimization applied.**
 
 ---
 
@@ -305,24 +279,25 @@ Not applicable - this is Ansible (imperative infrastructure provisioning), not a
 
 ## Priority Recommendations
 
-### High Priority
+### High Priority ✅ **COMPLETED**
 1. **Fix duplicate APT cache updates** in `tasks/docker-debian.yml`
    - Impact: 30-60 seconds saved per deployment
    - Effort: 5 minutes
    - Risk: Low
+   - **Status: APPLIED**
 
-### Medium Priority
-2. **Simplify K3s API check** in `tasks/deploy.yml`
-   - Impact: Better resource usage, easier debugging
-   - Effort: 15 minutes
-   - Risk: Medium (needs testing)
+### ~~Medium Priority~~ ❌ **REJECTED**
+2. **~~Simplify K3s API check~~** in `tasks/deploy.yml`
+   - **Status: REVERTED** - Does not work, original implementation is correct
+   - The proposed optimization failed testing and was reverted
 
-### Low Priority
+### Low Priority ✅ **COMPLETED**
 3. **Use native Ansible modules** instead of shell commands
    - Files: `certificates-letsencrypt.yml`, `certificates-provided.yml`
    - Impact: Cleaner code, better idempotency
    - Effort: 10 minutes each
    - Risk: Low
+   - **Status: APPLIED**
 
 ---
 
