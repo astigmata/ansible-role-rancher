@@ -79,14 +79,12 @@
     - rancher_ssl_chain_path | length > 0
     - complete_chain is defined
 
-- name: Use cert as fullchain if no chain provided
-  ansible.builtin.copy:
+- name: Symlink cert as fullchain if no chain provided
+  ansible.builtin.file:
     src: "{{ rancher_ssl_cert_dir }}/cert.pem"
     dest: "{{ rancher_ssl_cert_dir }}/fullchain.pem"
-    remote_src: true
-    mode: '0644'
-    owner: root
-    group: root
+    state: link
+    force: true
   when: rancher_ssl_chain_path is not defined or rancher_ssl_chain_path | length == 0
 
 - name: Get certificate info

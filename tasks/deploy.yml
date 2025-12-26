@@ -105,13 +105,8 @@
   when: not (rancher_skip_container_deploy | default(false) | bool)
 
 - name: Verify K3s API Aggregation is ready
-  ansible.builtin.shell: |
-    set -o pipefail
-    docker exec {{ rancher_container_name }} kubectl get apiservices \
-      -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.conditions[?(@.type=="Available")].status}{"\n"}{end}' 2>/dev/null | \
-    awk '{if ($2 != "True") {print $1 " not available (status: " $2 ")"; exit 1}}'
-  args:
-    executable: /bin/bash
+  ansible.builtin.command:
+    cmd: docker exec {{ rancher_container_name }} kubectl get --raw /readyz/aggregator
   register: apiservices_check
   until: apiservices_check.rc == 0
   retries: "{{ rancher_full_init_retries | default(60) }}"
@@ -124,9 +119,9 @@
   ansible.builtin.debug:
     msg: >-
       {{
-        'All API services are available and ready'
+        'K3s API Aggregation is ready'
         if apiservices_check.rc == 0
-        else 'Warning: Some API services may still be initializing - ' + (apiservices_check.stdout | default('unknown status'))
+        else 'Warning: K3s API Aggregation may still be initializing'
       }}
   when: not (rancher_skip_container_deploy | default(false) | bool)
 

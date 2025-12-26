@@ -2,6 +2,11 @@
 # ---------------------------------------------------------
 # DOCKER FOR DEBIAN / UBUNTU
 # ---------------------------------------------------------
+- name: Update APT cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
 - name: Install system dependencies and NTP (Debian/Ubuntu)
   ansible.builtin.package:
     name:
@@ -13,7 +18,6 @@
       - python3-docker
       - ntp
     state: present
-    update_cache: true
 
 - name: Enable NTP service
   ansible.builtin.service:
@@ -52,7 +56,6 @@
       - docker-buildx-plugin
       - docker-compose-plugin
     state: present
-    update_cache: true
 
 - name: Start Docker service
   ansible.builtin.service:

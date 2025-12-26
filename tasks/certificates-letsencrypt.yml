@@ -62,9 +62,9 @@
   register: key_copy
 
 - name: Create/Update combined certificate file (regenerate if cert renewed)
-  ansible.builtin.shell: >
-    cat {{ rancher_ssl_cert_dir }}/cert.pem {{ rancher_ssl_cert_dir }}/key.pem
-    > {{ rancher_ssl_cert_dir }}/tls.pem
+  ansible.builtin.shell:
+    cmd: cat cert.pem key.pem > tls.pem
+    chdir: "{{ rancher_ssl_cert_dir }}"
   when: cert_copy.changed or key_copy.changed
   changed_when: true
 
