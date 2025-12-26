@@ -49,23 +49,51 @@
   delay: "{{ rancher_api_wait_delay }}"
   when: not (rancher_skip_container_deploy | default(false) | bool)
 
-- name: Verify API stability (check multiple times to avoid K3s restarts)
+- name: Verify API stability check 1/3 (avoid K3s restarts)
   ansible.builtin.uri:
     url: "https://localhost:{{ rancher_port }}/ping"
     validate_certs: false
     status_code: 200
     follow_redirects: none
-  register: stability_check
-  failed_when: false
-  loop: "{{ range(1, 4) | list }}"
-  delay: 5
+  register: stability_check_1
+  when: not (rancher_skip_container_deploy | default(false) | bool)
+
+- name: Pause before second stability check
+  ansible.builtin.pause:
+    seconds: 5
+  when: not (rancher_skip_container_deploy | default(false) | bool)
+
+- name: Verify API stability check 2/3 (avoid K3s restarts)
+  ansible.builtin.uri:
+    url: "https://localhost:{{ rancher_port }}/ping"
+    validate_certs: false
+    status_code: 200
+    follow_redirects: none
+  register: stability_check_2
+  when: not (rancher_skip_container_deploy | default(false) | bool)
+
+- name: Pause before third stability check
+  ansible.builtin.pause:
+    seconds: 5
+  when: not (rancher_skip_container_deploy | default(false) | bool)
+
+- name: Verify API stability check 3/3 (avoid K3s restarts)
+  ansible.builtin.uri:
+    url: "https://localhost:{{ rancher_port }}/ping"
+    validate_certs: false
+    status_code: 200
+    follow_redirects: none
+  register: stability_check_3
   when: not (rancher_skip_container_deploy | default(false) | bool)
 
 - name: Ensure API remained stable
   ansible.builtin.assert:
-    that: stability_check.results | selectattr('status', 'equalto', 200) | list | length == 3
+    that:
+      - stability_check_1.status == 200
+      - stability_check_2.status == 200
+      - stability_check_3.status == 200
     fail_msg: "API unstable - K3s may still be initializing or restarting"
-    success_msg: "API confirmed stable across multiple checks"
+    success_msg: "API confirmed stable across 3 checks with 5s delays"
   when: not (rancher_skip_container_deploy | default(false) | bool)
 
 - name: Wait for Rancher health check to be ready
