@@ -1,5 +1,10 @@
 ---
+# Molecule testing requirements - synchronized with main requirements.yml
+# Updated 2025-12-27 - See DEPENDENCY_AUDIT.md for details
 collections:
   - name: community.general
+    version: ">=12.0.0"
   - name: community.docker
+    version: ">=4.7.0"
   - name: community.crypto  # Required for modern certificate management
+    version: ">=3.0.0"
