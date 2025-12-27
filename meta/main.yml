@@ -5,7 +5,7 @@ galaxy_info:
   author: astigmata
   description: Deploy Rancher Server (Single Node) on Ubuntu with Docker
   license: MIT
-  min_ansible_version: "2.9"
+  min_ansible_version: "2.17"  # Updated from 2.9 (EOL) - requires ansible-core 2.17+
 
   platforms:
     - name: Ubuntu

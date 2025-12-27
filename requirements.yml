@@ -1,11 +1,12 @@
 ---
 # Ansible Galaxy requirements
 # Install with: ansible-galaxy collection install -r requirements.yml
+# Updated 2025-12-27 - See DEPENDENCY_AUDIT.md for details
 
 collections:
   - name: community.general
-    version: ">=7.0.0"
+    version: ">=12.0.0"
   - name: community.docker
-    version: ">=3.0.0"
+    version: ">=4.7.0"
   - name: community.crypto
-    version: ">=2.0.0"
+    version: ">=3.0.0"
