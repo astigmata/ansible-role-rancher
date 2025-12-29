@@ -7,7 +7,7 @@
     update_cache: true
     cache_valid_time: 3600
 
-- name: Install system dependencies and NTP (Debian/Ubuntu)
+- name: Install system dependencies (Debian/Ubuntu)
   ansible.builtin.package:
     name:
       - apt-transport-https
@@ -16,14 +16,19 @@
       - gnupg
       - lsb-release
       - python3-docker
-      - ntp
     state: present
 
-- name: Enable NTP service
+- name: Check if systemd-timesyncd is available
+  ansible.builtin.stat:
+    path: /lib/systemd/system/systemd-timesyncd.service
+  register: timesyncd_service
+
+- name: Enable time synchronization (systemd-timesyncd)
   ansible.builtin.service:
-    name: ntp
+    name: systemd-timesyncd
     state: started
     enabled: true
+  when: timesyncd_service.stat.exists
 
 - name: Create APT keyrings directory
   ansible.builtin.file:

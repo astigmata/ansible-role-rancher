@@ -1,0 +1,56 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+require 'yaml'
+
+# -----------------------------------------------------------------------
+# DEBIAN 13 (Trixie) TESTING - Rancher deployment test
+# -----------------------------------------------------------------------
+# Usage:
+#   VAGRANT_VAGRANTFILE=Vagrantfile.debian vagrant up
+#   VAGRANT_VAGRANTFILE=Vagrantfile.debian vagrant ssh
+#   VAGRANT_VAGRANTFILE=Vagrantfile.debian vagrant destroy -f
+# -----------------------------------------------------------------------
+begin
+  test_vars = YAML.load_file('test_vars.yml')
+  RANCHER_PASSWORD = test_vars['rancher_bootstrap_password']
+rescue Errno::ENOENT
+  RANCHER_PASSWORD = "TestPassword123!"
+  puts "WARNING: test_vars.yml not found, using default password"
+rescue => e
+  RANCHER_PASSWORD = "TestPassword123!"
+  puts "WARNING: Failed to load test_vars.yml: #{e.message}"
+end
+
+Vagrant.configure("2") do |config|
+  # Debian 13 (Trixie) VM - using testing64 as trixie64 not available yet
+  # See: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=1110834
+  config.vm.box = "debian/testing64"
+  config.vm.hostname = "rancher-debian"
+  config.vm.network "private_network", ip: "192.168.56.12"
+
+  # Disable synced folder (Guest Additions issues with kernel headers)
+  config.vm.synced_folder ".", "/vagrant", disabled: true
+
+  # Disable vbguest plugin if installed
+  if Vagrant.has_plugin?("vagrant-vbguest")
+    config.vbguest.auto_update = false
+  end
+
+  config.vm.provider "virtualbox" do |vb|
+    vb.name = "rancher-debian-13"
+    vb.memory = "4096"
+    vb.cpus = 2
+    vb.linked_clone = true
+  end
+
+  config.vm.provision "ansible" do |ansible|
+    ansible.playbook = "test_playbook.yml"
+    ansible.verbose = "v"
+    ansible.extra_vars = {
+      rancher_bootstrap_password: RANCHER_PASSWORD,
+      rancher_configure_firewall: false,
+      ansible_python_interpreter: "/usr/bin/python3"
+    }
+  end
+end

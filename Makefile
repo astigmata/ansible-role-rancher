@@ -8,13 +8,10 @@ VAGRANT_CMD = VAGRANT_VAGRANTFILE=$(VAGRANT_FILE) vagrant
 
 help: ## Display this help
 	@echo ""
-	@echo "📦 Ansible Rancher Role - Makefile"
+	@echo "Ansible Rancher Role - Makefile"
 	@echo ""
-	@echo "📋 Available targets:"
+	@echo "Available targets:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-25s\033[0m %s\n", $$1, $$2}'
-	@echo ""
-	@echo "🐧 Ubuntu-specific targets:"
-	@echo "  \033[36mmake test-ubuntu\033[0m       - Test on Ubuntu 22.04 (IP: 192.168.56.10)"
 	@echo ""
 
 install: ## Install development dependencies
@@ -136,13 +133,13 @@ provision-ubuntu: ## Re-provision Ubuntu VM
 # ============================================================================
 
 destroy-all: ## Destroy all VMs (Ubuntu and default)
-	@echo "🗑️  Destroying all VMs..."
+	@echo "Destroying all VMs..."
 	@vagrant destroy -f 2>/dev/null || true
 	@VAGRANT_VAGRANTFILE=Vagrantfile.ubuntu vagrant destroy -f 2>/dev/null || true
-	@echo "✓ All VMs destroyed"
+	@echo "All VMs destroyed"
 
 status: ## Show status of all VMs
-	@echo "📊 Status:"
+	@echo "Status:"
 	@echo ""
 	@echo "=== Molecule (Docker) ==="
 	@molecule list -s default 2>/dev/null || echo "No Molecule instances"

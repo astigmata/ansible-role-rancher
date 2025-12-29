@@ -57,6 +57,7 @@ rancher_letsencrypt_email: ""  # Your email for Let's Encrypt notifications
 rancher_letsencrypt_domain: "" # Domain name for the certificate
 rancher_letsencrypt_staging: false  # Use staging server for testing
 
-# Testing mode (skip container deployment for Molecule tests)
-# Set to true to skip Rancher container deployment (useful for Docker-in-Docker tests)
-rancher_skip_container_deploy: false
+# Test mode - skip Rancher container deployment
+# Set to true when running in Docker-in-Docker environments (e.g., Molecule tests)
+# This validates all prerequisites without actually deploying Rancher
+rancher_test_mode: false

@@ -1,0 +1,181 @@
+---
+argument_specs:
+  main:
+    short_description: Deploy Rancher Server (Single Node) with Docker
+    description:
+      - This role deploys Rancher Server in single-node mode using Docker.
+      - Supports Ubuntu 20.04/22.04/24.04 and Debian 11/12/13.
+      - Includes SSL certificate management, firewall configuration, and health checks.
+    author:
+      - astigmata
+    options:
+      rancher_bootstrap_password:
+        description:
+          - Initial admin password for Rancher.
+          - Must be at least 12 characters with at least one digit.
+        type: str
+        required: true
+
+      rancher_version:
+        description:
+          - Rancher version to deploy.
+          - Use a specific version (e.g., v2.9.3) in production.
+        type: str
+        default: "v2.13.1"
+
+      rancher_data_volume:
+        description: Docker volume name for Rancher data persistence.
+        type: str
+        default: "rancher_data"
+
+      rancher_container_name:
+        description: Name of the Rancher Docker container.
+        type: str
+        default: "rancher"
+
+      rancher_port:
+        description: HTTPS port for Rancher web interface.
+        type: int
+        default: 8443
+
+      rancher_http_port:
+        description: HTTP port for Rancher (redirects to HTTPS).
+        type: int
+        default: 8080
+
+      rancher_min_vcpus:
+        description: Minimum required vCPUs for validation.
+        type: int
+        default: 2
+
+      rancher_min_memory_mb:
+        description: Minimum required RAM in MB for validation.
+        type: int
+        default: 3500
+
+      rancher_api_wait_retries:
+        description: Number of retries for API availability check.
+        type: int
+        default: 90
+
+      rancher_api_wait_delay:
+        description: Delay in seconds between API availability retries.
+        type: int
+        default: 10
+
+      rancher_full_init_retries:
+        description: Number of retries for K3s full initialization.
+        type: int
+        default: 60
+
+      rancher_full_init_delay:
+        description: Delay in seconds between K3s initialization checks.
+        type: int
+        default: 10
+
+      rancher_configure_firewall:
+        description: Whether to configure UFW firewall automatically.
+        type: bool
+        default: true
+
+      rancher_ssl_mode:
+        description:
+          - SSL certificate mode.
+          - "selfsigned: Generate self-signed certificate (default)"
+          - "provided: Use your own certificate files"
+          - "letsencrypt: Use Let's Encrypt (requires public domain)"
+        type: str
+        default: "selfsigned"
+        choices:
+          - selfsigned
+          - provided
+          - letsencrypt
+
+      rancher_ssl_cert_dir:
+        description: Directory to store SSL certificates on target.
+        type: str
+        default: "/opt/rancher/ssl"
+
+      rancher_ssl_selfsigned_common_name:
+        description: Common Name (CN) for self-signed certificate.
+        type: str
+        default: "{{ rancher_public_ip | default(ansible_default_ipv4.address) }}"
+
+      rancher_ssl_selfsigned_country:
+        description: Country code for self-signed certificate.
+        type: str
+        default: "US"
+
+      rancher_ssl_selfsigned_state:
+        description: State/Province for self-signed certificate.
+        type: str
+        default: "State"
+
+      rancher_ssl_selfsigned_locality:
+        description: City/Locality for self-signed certificate.
+        type: str
+        default: "City"
+
+      rancher_ssl_selfsigned_organization:
+        description: Organization name for self-signed certificate.
+        type: str
+        default: "Rancher"
+
+      rancher_ssl_selfsigned_days:
+        description: Validity period in days for self-signed certificate.
+        type: int
+        default: 365
+
+      rancher_ssl_cert_path:
+        description:
+          - Path to certificate file on Ansible controller.
+          - Required when rancher_ssl_mode is 'provided'.
+        type: path
+        default: ""
+
+      rancher_ssl_key_path:
+        description:
+          - Path to private key file on Ansible controller.
+          - Required when rancher_ssl_mode is 'provided'.
+        type: path
+        default: ""
+
+      rancher_ssl_chain_path:
+        description:
+          - Path to CA chain file on Ansible controller.
+          - Optional, used when rancher_ssl_mode is 'provided'.
+        type: path
+        default: ""
+
+      rancher_letsencrypt_email:
+        description:
+          - Email address for Let's Encrypt notifications.
+          - Required when rancher_ssl_mode is 'letsencrypt'.
+        type: str
+        default: ""
+
+      rancher_letsencrypt_domain:
+        description:
+          - Domain name for Let's Encrypt certificate.
+          - Required when rancher_ssl_mode is 'letsencrypt'.
+        type: str
+        default: ""
+
+      rancher_letsencrypt_staging:
+        description: Use Let's Encrypt staging server for testing.
+        type: bool
+        default: false
+
+      rancher_public_ip:
+        description:
+          - Public IP address for Rancher access URLs.
+          - Defaults to ansible_default_ipv4.address if not set.
+        type: str
+        required: false
+
+      rancher_test_mode:
+        description:
+          - Skip Rancher container deployment.
+          - Used for testing in Docker-in-Docker environments.
+        type: bool
+        default: false
