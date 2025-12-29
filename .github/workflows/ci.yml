@@ -29,7 +29,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: pip
 
       - name: Install dependencies
         run: pip install yamllint ansible-lint ansible-core
@@ -60,11 +59,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: pip
 
       - name: Install dependencies
-        run: |
-          pip install ansible-core molecule molecule-plugins[docker] docker
+        run: pip install ansible-core molecule molecule-plugins[docker] docker
 
       - name: Install Ansible collections
         run: ansible-galaxy collection install -r requirements.yml
