@@ -8,8 +8,30 @@ driver:
   name: docker
 
 platforms:
-  - name: rancher-ubuntu-22.04
+  - name: ubuntu2204
     image: geerlingguy/docker-ubuntu2204-ansible:latest
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    pre_build_image: true
+    networks:
+      - name: rancher-test-network
+
+  - name: ubuntu2404
+    image: geerlingguy/docker-ubuntu2404-ansible:latest
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    pre_build_image: true
+    networks:
+      - name: rancher-test-network
+
+  - name: debian12
+    image: geerlingguy/docker-debian12-ansible:latest
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
@@ -24,12 +46,16 @@ provisioner:
   config_options:
     defaults:
       callbacks_enabled: profile_tasks,timer
+      gathering: smart
+      fact_caching: jsonfile
+      fact_caching_connection: /tmp/ansible_facts
+      fact_caching_timeout: 3600
   inventory:
-    host_vars:
-      rancher-ubuntu-22.04:
+    group_vars:
+      all:
         rancher_bootstrap_password: "TestPassword123!"
         rancher_configure_firewall: false
-        rancher_skip_container_deploy: true
+        rancher_test_mode: true
   playbooks:
     converge: converge.yml
     verify: verify.yml

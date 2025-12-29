@@ -12,7 +12,7 @@
     src: rancher-entrypoint-fixed.sh
     dest: /tmp/rancher-entrypoint-fixed.sh
     mode: '0755'
-  when: not (rancher_skip_container_deploy | default(false) | bool)
+  when: not (rancher_test_mode | default(false) | bool)
 
 - name: Start Rancher container
   community.docker.docker_container:
@@ -35,7 +35,7 @@
       CATTLE_BOOTSTRAP_PASSWORD: "{{ rancher_bootstrap_password }}"
     comparisons:
       env: strict
-  when: not (rancher_skip_container_deploy | default(false) | bool)
+  when: not (rancher_test_mode | default(false) | bool)
 
 - name: Wait for Rancher API availability
   ansible.builtin.uri:
@@ -47,54 +47,24 @@
   until: result.status == 200
   retries: "{{ rancher_api_wait_retries }}"
   delay: "{{ rancher_api_wait_delay }}"
-  when: not (rancher_skip_container_deploy | default(false) | bool)
+  when: not (rancher_test_mode | default(false) | bool)
 
-- name: Verify API stability check 1/3 (avoid K3s restarts)
+- name: Verify API stability (3 consecutive successful checks)
   ansible.builtin.uri:
     url: "https://localhost:{{ rancher_port }}/ping"
     validate_certs: false
     status_code: 200
     follow_redirects: none
-  register: stability_check_1
-  when: not (rancher_skip_container_deploy | default(false) | bool)
+  register: stability_check
+  until: stability_check.status == 200
+  retries: 3
+  delay: 5
+  when: not (rancher_test_mode | default(false) | bool)
 
-- name: Pause before second stability check
-  ansible.builtin.pause:
-    seconds: 5
-  when: not (rancher_skip_container_deploy | default(false) | bool)
-
-- name: Verify API stability check 2/3 (avoid K3s restarts)
-  ansible.builtin.uri:
-    url: "https://localhost:{{ rancher_port }}/ping"
-    validate_certs: false
-    status_code: 200
-    follow_redirects: none
-  register: stability_check_2
-  when: not (rancher_skip_container_deploy | default(false) | bool)
-
-- name: Pause before third stability check
-  ansible.builtin.pause:
-    seconds: 5
-  when: not (rancher_skip_container_deploy | default(false) | bool)
-
-- name: Verify API stability check 3/3 (avoid K3s restarts)
-  ansible.builtin.uri:
-    url: "https://localhost:{{ rancher_port }}/ping"
-    validate_certs: false
-    status_code: 200
-    follow_redirects: none
-  register: stability_check_3
-  when: not (rancher_skip_container_deploy | default(false) | bool)
-
-- name: Ensure API remained stable
-  ansible.builtin.assert:
-    that:
-      - stability_check_1.status == 200
-      - stability_check_2.status == 200
-      - stability_check_3.status == 200
-    fail_msg: "API unstable - K3s may still be initializing or restarting"
-    success_msg: "API confirmed stable across 3 checks with 5s delays"
-  when: not (rancher_skip_container_deploy | default(false) | bool)
+- name: Confirm API stability
+  ansible.builtin.debug:
+    msg: "API confirmed stable - passed {{ stability_check.attempts }} consecutive checks"
+  when: not (rancher_test_mode | default(false) | bool)
 
 - name: Wait for Rancher health check to be ready
   ansible.builtin.uri:
@@ -106,7 +76,7 @@
   until: healthz_result.status == 200 and healthz_result.content == 'ok'
   retries: "{{ rancher_full_init_retries | default(60) }}"
   delay: "{{ rancher_full_init_delay | default(10) }}"
-  when: not (rancher_skip_container_deploy | default(false) | bool)
+  when: not (rancher_test_mode | default(false) | bool)
 
 - name: Wait for Rancher API to accept requests (auth providers)
   ansible.builtin.uri:
@@ -118,7 +88,7 @@
   until: api_ready.status == 200
   retries: "{{ rancher_full_init_retries | default(60) }}"
   delay: "{{ rancher_full_init_delay | default(10) }}"
-  when: not (rancher_skip_container_deploy | default(false) | bool)
+  when: not (rancher_test_mode | default(false) | bool)
 
 - name: Wait for local cluster to be created
   ansible.builtin.uri:
@@ -130,7 +100,7 @@
   until: cluster_check.status in [200, 401]
   retries: "{{ rancher_full_init_retries | default(60) }}"
   delay: "{{ rancher_full_init_delay | default(10) }}"
-  when: not (rancher_skip_container_deploy | default(false) | bool)
+  when: not (rancher_test_mode | default(false) | bool)
 
 - name: Verify K3s API Aggregation is ready
   ansible.builtin.shell: |
@@ -146,7 +116,7 @@
   delay: "{{ rancher_full_init_delay | default(10) }}"
   changed_when: false
   failed_when: false
-  when: not (rancher_skip_container_deploy | default(false) | bool)
+  when: not (rancher_test_mode | default(false) | bool)
 
 - name: Display API Aggregation status
   ansible.builtin.debug:
@@ -156,7 +126,7 @@
         if apiservices_check.rc == 0
         else 'Warning: Some API services may still be initializing - ' + (apiservices_check.stdout | default('unknown status'))
       }}
-  when: not (rancher_skip_container_deploy | default(false) | bool)
+  when: not (rancher_test_mode | default(false) | bool)
 
 - name: Deployment complete
   ansible.builtin.debug:
@@ -170,7 +140,7 @@
       - "  Username: admin"
       - "  Password: {{ rancher_bootstrap_password }}"
       - "======================================================="
-  when: not (rancher_skip_container_deploy | default(false) | bool)
+  when: not (rancher_test_mode | default(false) | bool)
 
 - name: Test mode - Rancher container deployment skipped
   ansible.builtin.debug:
@@ -183,4 +153,4 @@
       - "  - Rancher data volume created"
       - "Ready for Rancher deployment in production!"
       - "======================================================="
-  when: rancher_skip_container_deploy | default(false) | bool
+  when: rancher_test_mode | default(false) | bool

@@ -12,7 +12,7 @@
       ansible.builtin.set_fact:
         rancher_bootstrap_password: "TestPassword123!"
         rancher_configure_firewall: false
-        rancher_skip_container_deploy: true
+        rancher_test_mode: true
 
   tasks:
     - name: Include role tasks

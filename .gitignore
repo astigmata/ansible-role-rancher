@@ -20,6 +20,7 @@ __pycache__/
 # Ansible
 *.retry
 *.log
+.ansible/
 
 # IDE
 .vscode/

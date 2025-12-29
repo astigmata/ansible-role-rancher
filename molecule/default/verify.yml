@@ -41,7 +41,7 @@
       community.docker.docker_container_info:
         name: rancher
       register: rancher_container
-      when: not (rancher_skip_container_deploy | default(false) | bool)
+      when: not (rancher_test_mode | default(false) | bool)
 
     - name: Assert Rancher container exists and is running
       ansible.builtin.assert:
@@ -50,7 +50,7 @@
           - rancher_container.container.State.Status == 'running'
         fail_msg: "Rancher container is not running properly"
         success_msg: "Rancher container is running"
-      when: not (rancher_skip_container_deploy | default(false) | bool)
+      when: not (rancher_test_mode | default(false) | bool)
 
     - name: Verify Rancher ports are exposed
       ansible.builtin.assert:
@@ -59,7 +59,7 @@
           - rancher_container.container.NetworkSettings.Ports['443/tcp'] is defined
         fail_msg: "Rancher ports are not properly exposed"
         success_msg: "Rancher ports are properly exposed"
-      when: not (rancher_skip_container_deploy | default(false) | bool)
+      when: not (rancher_test_mode | default(false) | bool)
 
     - name: Check Rancher API (may take some time)
       ansible.builtin.uri:
@@ -72,12 +72,12 @@
       retries: 30
       delay: 10
       failed_when: false
-      when: not (rancher_skip_container_deploy | default(false) | bool)
+      when: not (rancher_test_mode | default(false) | bool)
 
     - name: Display Rancher API status
       ansible.builtin.debug:
         msg: "Rancher API status: {{ rancher_api.status | default('Not reachable yet') }}"
-      when: not (rancher_skip_container_deploy | default(false) | bool)
+      when: not (rancher_test_mode | default(false) | bool)
 
     # ENHANCED: Certificate validation tests
     - name: Check if SSL certificate files exist
@@ -113,7 +113,7 @@
           - "✓ All prerequisites validated"
           - "Note: Rancher container deployment was skipped (Docker-in-Docker limitation)"
           - "======================================================="
-      when: rancher_skip_container_deploy | default(false) | bool
+      when: rancher_test_mode | default(false) | bool
 
     - name: UFW status (if Ubuntu and firewall configured)
       ansible.builtin.command: ufw status

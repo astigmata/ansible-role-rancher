@@ -1,7 +1,7 @@
 ---
 name: CI
 
-on:
+"on":
   push:
     branches:
       - main
@@ -9,6 +9,13 @@ on:
   pull_request:
     branches:
       - main
+  schedule:
+    # Run weekly on Sunday at 00:00 UTC
+    - cron: "0 0 * * 0"
+
+env:
+  PY_COLORS: "1"
+  ANSIBLE_FORCE_COLOR: "1"
 
 jobs:
   lint:
@@ -21,11 +28,11 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
+          cache: pip
 
       - name: Install dependencies
-        run: |
-          pip install ansible ansible-lint yamllint
+        run: pip install yamllint ansible-lint ansible-core
 
       - name: Run yamllint
         run: yamllint .
@@ -34,9 +41,17 @@ jobs:
         run: ansible-lint
 
   molecule:
-    name: Molecule
+    name: Molecule (${{ matrix.distro }})
     runs-on: ubuntu-latest
     needs: lint
+    strategy:
+      fail-fast: false
+      matrix:
+        distro:
+          - ubuntu2204
+          - ubuntu2404
+          - debian12
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -44,17 +59,37 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
+          cache: pip
 
       - name: Install dependencies
         run: |
-          pip install ansible molecule molecule-plugins[docker] docker
+          pip install ansible-core molecule molecule-plugins[docker] docker
 
       - name: Install Ansible collections
         run: ansible-galaxy collection install -r requirements.yml
 
       - name: Run Molecule tests
-        run: molecule test -s default
-        env:
-          PY_COLORS: '1'
-          ANSIBLE_FORCE_COLOR: '1'
+        run: molecule test -s default --platform-name ${{ matrix.distro }}
+
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    needs: molecule
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Ansible
+        run: pip install ansible-core
+
+      - name: Publish to Ansible Galaxy
+        run: |
+          echo "Role ready for Galaxy publication"
+          echo "To publish: ansible-galaxy role import --token \$GALAXY_TOKEN astigmata ansible-role-rancher"

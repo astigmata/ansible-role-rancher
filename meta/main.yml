@@ -3,7 +3,7 @@ galaxy_info:
   role_name: rancher
   namespace: astigmata
   author: astigmata
-  description: Deploy Rancher Server (Single Node) on Ubuntu with Docker
+  description: Deploy Rancher Server (Single Node) with Docker on Ubuntu/Debian
   license: MIT
   min_ansible_version: "2.9"
 
@@ -13,6 +13,11 @@ galaxy_info:
         - focal
         - jammy
         - noble
+    - name: Debian
+      versions:
+        - bullseye
+        - bookworm
+        - trixie
 
   galaxy_tags:
     - rancher
@@ -21,6 +26,7 @@ galaxy_info:
     - container
     - k3s
     - ubuntu
+    - debian
 
 dependencies: []
 

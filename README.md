@@ -1,22 +1,33 @@
 # Ansible Role: Rancher
 
-This Ansible role deploys Rancher Server in single node mode with Docker.
+[![CI](https://github.com/astigmata/ansible-role-rancher/actions/workflows/ci.yml/badge.svg)](https://github.com/astigmata/ansible-role-rancher/actions/workflows/ci.yml)
+[![Ansible Role](https://img.shields.io/badge/ansible--galaxy-astigmata.rancher-blue.svg)](https://galaxy.ansible.com/astigmata/rancher)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Prerequisites
+Deploy Rancher Server in single-node mode with Docker.
+
+## Requirements
+
+| Component | Version |
+|-----------|---------|
+| Ansible | >= 2.17 |
+| Python | >= 3.10 |
 
 **Supported Operating Systems:**
-- Ubuntu 20.04, 22.04, 24.04
+
+| Distribution | Versions |
+|--------------|----------|
+| Ubuntu | 20.04, 22.04, 24.04 |
+| Debian | 11 (Bullseye), 12 (Bookworm), 13 (Trixie) |
 
 **Hardware Requirements:**
-- At least 2 vCPUs
-- At least 4 GB of RAM (3.5 GB minimum)
+- 2+ vCPUs
+- 4+ GB RAM (3.5 GB minimum)
 
-**Software Requirements:**
-- Ansible 2.9+
-- Required collections:
-  - `community.general`
-  - `community.docker`
-  - `community.crypto`
+**Required Collections:**
+- `community.general` >= 12.0.0
+- `community.docker` >= 4.7.0
+- `community.crypto` >= 3.0.0
 
 ## Installing dependencies
 
@@ -388,6 +399,39 @@ sudo ufw status verbose
 sudo ufw allow 8443/tcp
 sudo ufw allow 8080/tcp
 ```
+
+## Known Limitations
+
+### RHEL-Family Distributions (Rocky Linux, AlmaLinux, CentOS)
+
+This role does **not support** RHEL-family distributions (Rocky Linux 8/9, AlmaLinux 8/9, CentOS Stream 8/9). This is due to fundamental incompatibilities with Rancher's embedded K3s cluster:
+
+**Root Cause:**
+- Rancher uses an embedded K3s cluster for its internal operations
+- K3s has known compatibility issues with cgroup v2 (default on RHEL 9+)
+- The K3s process crashes with `exit status 1` shortly after startup
+- This occurs even with SELinux in permissive mode
+
+**Symptoms observed:**
+```
+rancher | The embedded K3s cluster failed to initialize
+rancher | Error: exit status 1
+```
+
+**Workarounds attempted (all failed):**
+1. SELinux permissive mode
+2. Manual cgroup v1 configuration
+3. Docker cgroup driver changes
+4. K3s-specific environment variables
+
+**Recommended alternatives for RHEL-family:**
+- Use RKE2 (Rancher Kubernetes Engine) instead of single-node Docker
+- Deploy Rancher on a Kubernetes cluster with Helm
+- Use Ubuntu/Debian for single-node Docker deployments
+
+For more information, see:
+- [K3s Known Issues](https://docs.k3s.io/known-issues)
+- [Rancher Requirements](https://ranchermanager.docs.rancher.com/getting-started/installation-and-upgrade/installation-requirements)
 
 ## License
 
